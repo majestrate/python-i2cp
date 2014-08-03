@@ -1,0 +1,257 @@
+#!/usr/bin/env python3.4
+
+import logging
+import random
+import struct
+
+from .util import *
+from .datatypes import *
+
+
+class message_type(Enum):
+    CreateSession = 1
+    ReconfigSession = 2
+    DestroySession = 3
+    CreateLS = 4
+    SendMessage = 5
+    RecvMessageBegin = 6
+    RecvMessageEnd = 7
+    GetBWLimits = 8
+    SessionStatus = 20
+    RequestLS = 21
+    MessageStatus = 22
+    BWLimits = 23
+    ReportAbuse = 29
+    Disconnect = 30
+    MessagePayload = 31
+    GetDate = 32
+    SetDate = 33
+    DestLookup = 34
+    DestLookupRely = 35
+    SendMessageExpires = 36
+    RequestVarLS = 37
+    HostLookup = 38
+    HostLookupReply = 39
+
+
+
+class Message:
+    """
+    i2cp message
+    """
+    
+    _log = logging.getLogger('I2CP-Message')
+
+    @staticmethod
+    def parse(data):
+        """
+        raw data -> Message
+        """
+        dlen = len(data)
+        if dlen < 5:
+            raise I2CPException('data too short, %d bytes' % len(data))
+        _len, _type = struct.unpack('>IB', data[:5])
+        if _len + 5 != dlen:
+            raise I2CPException('incorrect i2cp message, expected %d bytes got %d' % (_len , dlen - 5))
+        _data = data[5:dlen]
+        return message_type(_type), _data
+
+
+    def __init__(self, type=None, body=None, raw=None):
+        if raw:
+            type, body = self.parse(raw)
+        self.type = type
+        self.body = body or bytearray()
+
+    def serialize(self):
+        """
+        serialize to bytearray
+        """
+        hdr = struct.pack('>IB', len(self.body), self.type.value)
+        hdr += self.body
+        return hdr
+
+    def __str__(self):
+        return '[I2CPMessage type=%s body=%s]' % (self.type.name, self.body)
+
+class HostLookupMessage(Message):
+    """
+    Host Lookup Message
+    Send this to initiate a host lookup
+    """
+
+
+    def __init__(self, name=None, sid=None, reqid=None, raw=None, req_timeout=5.0):
+        if raw:
+            Message.__init__(self, raw=raw)
+            self.sid = struct.unpack('>H', self.body[2:])
+            self.reqid = struct.unpack('>I', self.body[3:7])
+            self.reqtype = self.body[8]
+            self.timeout = -1
+            if self.reqtype == 0:
+                self.name = hash_to_b32(body[9:41])
+            else:
+                self.name = i2cp_string.parse(body[9:])
+        else:    
+            self.name = name
+            self.timeout = req_timeout
+            self.sid = sid or NO_SESSION_ID
+            self.reqid = reqid or random.randint(1, 2 ** 16)
+            body = bytearray()
+            body += struct.pack('>H', self.sid)
+            body += timeout(req_timeout)
+            if isdesthash(name):
+                body += struct.pack('>I', 0)
+                body += b32_to_bytes(name)
+            else:
+                body += struct.pack('>I', 1)
+                body += i2cp_string.create(name)
+            Message.__init__(self, message_type.HostLookup, body)
+        
+
+    def __str__(self):
+        return '[HostLookupMessage reqid=%d sid=%d timeout=%f name=%s]' % (
+            self.reqid, self.sid, self.timeout, self.name)
+
+class HostLookupReplyMessage(Message):
+
+    def __init__(self, name=None, sid=None, raw=None):
+        if raw:
+            Message.__init__(self, raw)
+            self.sid = struct.unpack('>H', self.body[:2])
+            self.reqid = struct.unpack('>I', self.body[3:7])
+            code = self.body[8]
+            if code == 0:
+                self.dest = destination(self.body[:9])
+        else:
+            raise NotImplemented()
+
+
+class CreateSessionMessage(Message):
+    
+    def __init__(self, opts=None, date=None, dest=None, raw=None):
+        if raw:
+            Message.__init__(self, raw)
+        else:
+            self.opts = opts
+            data = bytearray()
+            _dest = dest.serialize()
+            self._log.debug('dest len: %d' % len(_dest))
+            opts = mapping(self.opts).serialize()
+            self._log.debug('opts: %s' % opts)
+            data += _dest
+            data += opts
+            data += date
+            data += dest.sign(data)
+            type = message_type.CreateSession
+            Message.__init__(self, type, data)
+
+class RequestLSMessage(Message):
+
+    _log = logging.getLogger(__name__)
+    
+    def __init__(self, raw):
+        Message.__init__(self, raw=raw)
+        raw = self.body
+        self.leases = []
+        self.sid = struct.unpack('>H',raw[:2])
+        numtun  = raw[2]
+        self._log.debug('got %d leases' % numtun)
+        data = raw[3:]
+        while numtun > 0:
+            ri = data[:32]
+            data = data[32:]
+            tid = struct.unpack('>I', data[:4])[0]
+            data = data[4:]
+            numtun -= 1
+            self.leases.append(lease(ri_hash=ri, tid=tid))
+        self.date = date(struct.unpack('>Q', data)[0])
+
+    def __str__(self):
+        return '[RequestLS sid=%d date=%s leases=%s]' % (self.sid,self.date, self.leases)
+
+class CreateLSMessage(Message):
+
+    _log = logging.getLogger('CreateLS')
+
+    def __init__(self, raw=None, sid=None, sigkey=None, enckey=None, leaseset=None):
+        if raw:
+            raise NotImplemented()
+        else:
+            body = bytearray()
+            body += struct.pack('>H', sid)
+            body += dsa_private_key_to_bytes(sigkey)
+            self._log.debug(body)
+            body += elgamal_private_key_to_bytes(enckey)
+            body += leaseset.serialize()
+            self._log.debug('body=%s' % body)
+            Message.__init__(self, type=message_type.CreateLS, body=body)
+            self.sid = sid
+            self.sigkey = sigkey
+            self.enckey = enckey
+            self.ls = leaseset
+        
+    def __str__(self):
+        return '[CreateVarLS sid=%s leasesets=%s sigkey=%s enckey=%s]' % (
+            self.sid, 
+            self.ls, 
+            dsa_public_key_to_bytes(self.sigkey), 
+            elgamal_public_key_to_bytes(self.enckey))
+
+
+class DisconnectMessage(Message):
+
+    def __init__(self, reason='kthnxbai'):
+        Message.__init__(self, message_type.Disconnect, i2p_string.create(reason))
+        self.reason = reason
+
+    def __str__(self):
+        return '[Disconnect %s]' % self.reason
+
+class session_status(Enum):
+
+    DESTROYED = 0
+    CREATED = 1
+    UPDATED = 2
+    INVALID = 3
+    REFUSED = 4
+    
+
+class SessionStatusMessage(Message):
+    
+    _log = logging.getLogger(__name__)
+
+    def __init__(self, raw):
+        Message.__init__(self, raw=raw)
+        self.sid = struct.unpack('>H', self.body[:2])[0]
+        self._log.debug('sid=%d' % self.sid)
+        status = self.body[2]
+        self.status = session_status(status)
+
+    def __str__(self):
+        return '[SessionStatus sid=%d status=%s]' % (self.sid, self.status.name)
+
+
+class SendMessageMessage(Message):
+
+    def __init__(self, sid, dest, payload, nonce=None):
+
+        if isinstance(payload, str):
+            payload = payload.encode('utf-8')
+        if nonce is None:
+            nonce = sid
+            while nonce == sid:
+                nonce = random().randint(0, 2 ** 32)                
+        body = bytearray()
+        body += struct.unpack('>H', sid)
+        body += dest.serialize()
+        body += payload
+        body += struct.pack('>I', nonce)
+        Message.__init__(self, type=message_type.SendMessage, body=body)
+        self.sid = sid
+        self.dest = dest
+        self.payload = payload
+        self.nonce = nonce
+
+    def __str__(self):
+        return '[SendMessage nonce=%d sid=%s dest=%s payload=%s]' % ( self.nonce, self.sid, self.dest, self.payload)
