@@ -1,12 +1,12 @@
-#!/usr/bin/env python3.4
 
+import io
 import logging
 import random
 import struct
 
 from .util import *
 from .datatypes import *
-
+from .exceptions import *
 
 class message_type(Enum):
     CreateSession = 1
@@ -43,23 +43,24 @@ class Message:
     _log = logging.getLogger('I2CP-Message')
 
     @staticmethod
-    def parse(data):
+    def parse(fd, parts=True):
         """
-        raw data -> Message
+
         """
-        dlen = len(data)
-        if dlen < 5:
-            raise I2CPException('data too short, %d bytes' % len(data))
-        _len, _type = struct.unpack('>IB', data[:5])
-        if _len + 5 != dlen:
-            raise I2CPException('incorrect i2cp message, expected %d bytes got %d' % (_len , dlen - 5))
-        _data = data[5:dlen]
-        return message_type(_type), _data
+        raw = fd.read(5)
+        _len, _type = struct.unpack('>IB', raw)
+        _data = fd.read(_len)
+        if parts:
+            return message_type(_type), _data
+        return Message(type=message_type(_type), body=_data), raw + _data
 
 
-    def __init__(self, type=None, body=None, raw=None):
+    def __init__(self, type=None, body=None, fd=None, raw=None):
         if raw:
-            type, body = self.parse(raw)
+            with io.BytesIO(raw) as fd:
+                type, body = self.parse(fd)
+        elif fd:
+            type, body = self.parse(fd)
         self.type = type
         self.body = body or bytearray()
 
@@ -68,8 +69,7 @@ class Message:
         serialize to bytearray
         """
         hdr = struct.pack('>IB', len(self.body), self.type.value)
-        hdr += self.body
-        return hdr
+        return hdr + self.body
 
     def __str__(self):
         return '[I2CPMessage type=%s body=%s]' % (self.type.name, self.body)
@@ -96,10 +96,8 @@ class HostLookupMessage(Message):
             body += struct.pack('>I', self.rid)
             body += struct.pack('>I', self.timeout)
             self.req_type = 1
-            if isdesthash(name):
-                name = b32_to_bytes(name)
-            else:
-                name = i2p_string.create(name)
+
+            name = i2p_string.create(name)
 
             body += struct.pack('>B', self.req_type)
             body += name
@@ -230,6 +228,7 @@ class SessionStatusMessage(Message):
 
     def __init__(self, raw):
         Message.__init__(self, raw=raw)
+        self._log.debug('body_len=%d' %len(self.body))
         self.sid = struct.unpack('>H', self.body[:2])[0]
         self._log.debug('sid=%d' % self.sid)
         status = self.body[2]
@@ -246,8 +245,8 @@ class MessagePayloadMessage(Message):
     def __init__(self, raw):
         Message.__init__(self,raw=raw)
         data = self.body
-        self.sid = struct.unpack('>H', data[:2])
-        self.mid = struct.unpack('>I', data[2:6])
+        self.sid = struct.unpack('>H', data[:2])[0]
+        self.mid = struct.unpack('>I', data[2:6])[0]
         self.payload = i2cp_payload(raw=data[7:])
 
     def __str__(self):
@@ -256,15 +255,10 @@ class MessagePayloadMessage(Message):
 class SendMessageMessage(Message):
 
     def __init__(self, sid, dest, payload, nonce=None):
-
-        if isinstance(payload, str):
-            payload = payload.encode('utf-8')
         if nonce is None:
-            nonce = sid
-            while nonce == sid:
-                nonce = random().randint(0, 2 ** 32)                
+            nonce = 0
         body = bytearray()
-        body += struct.unpack('>H', sid)
+        body += struct.pack('>H', sid)
         body += dest.serialize()
         body += payload
         body += struct.pack('>I', nonce)
@@ -276,3 +270,52 @@ class SendMessageMessage(Message):
 
     def __str__(self):
         return '[SendMessage nonce=%d sid=%s dest=%s payload=%s]' % ( self.nonce, self.sid, self.dest, self.payload)
+
+
+class message_status(Enum):
+    AVAILABLE = 0
+    ACCEPTED = 1
+    BEST_EFFORT_SUCCESS = 2
+    BEST_EFFORT_FAIL = 3
+    GAURENTEED_SUCCESS = 4
+    GAURENTEED_FAIL = 5
+    LOCAL_SUCCESS = 6
+    LOCAL_FAIL = 7
+    ROUTER_FAIL = 8
+    NET_FAIL = 9
+    BAD_SESSION = 10
+    BAD_MESSAGE = 11
+    BAD_OPTS = 12
+    OVERFLOW = 13
+    EXPIRED = 14
+    BAD_LOCAL_LS = 15
+    NO_LOCAL_TUN = 16
+    UNSUPPORTED_CRYPTO = 17
+    BAD_DEST = 18
+    BAD_LS = 19
+    EXPIRED_LS = 20
+    NO_LS = 21
+    
+    
+
+class MessageStatusMessage(Message):
+
+    def __init__(self, raw):
+        if raw:
+            Message.__init__(self,raw=raw)
+            raw = self.body
+            self.sid = struct.unpack('>H', raw[:2])[0]
+            self.mid = struct.unpack('>I', raw[2:6])[0]
+            self.status = message_status(raw[7])
+            self.size = struct.unpack('>I', raw[7:11])[0]
+            self.nonce = struct.unpack('>I', raw[11:15])[0]
+        else:
+            raise NotImplemented()
+
+    def __repr__(self):
+        return '[MessageStatus sid=%d mid=%d status=%s size=%d nonce=%d]' % (
+            self.sid,
+            self.mid,
+            self.status,
+            self.size,
+            self.nonce)

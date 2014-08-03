@@ -24,6 +24,13 @@ def i2p_b64decode(data):
 def i2p_b32encode(data):
     return base64.b32encode(data).replace(b'=',b'').lower() + b'.b32.i2p'
 
+
+def b32_to_bytes(data):
+    print (data)
+    data = data.split('.b32.i2p')[0].upper() + '===='
+    print (data)
+    return base64.b32decode(data)
+
 def deflate(data, compresslevel=2):
     compress = zlib.compressobj(
             compresslevel,

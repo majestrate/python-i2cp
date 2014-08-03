@@ -110,6 +110,8 @@ class destination:
     @staticmethod
     def parse(data, b64=True):
         destination._log.debug('dest len=%d' %len(data))
+        if len(data) < 387:
+            return None, None, None
         if b64:
             data = i2p_b64decode(data)
         ctype = certificate_type(data[384])
@@ -160,7 +162,7 @@ class destination:
 
     def __len__(self):
         return len(self.serialize())
-        
+
     def base32(self):
         data = bytearray()
         data += elgamal_public_key_to_bytes(self.enckey)
@@ -300,6 +302,35 @@ def date(num=None):
     return struct.pack('>Q', num)
 
 
+class datagram:
+
+    _log = logging.getLogger('datagram')
+
+    def __init__(self, dest=None, raw=None, payload=None):
+        if raw:
+            self._log.debug('raw=%s' % raw)
+            self.data = raw
+            self.dest = destination(raw=raw)
+            raw = raw[len(self.dest):]
+            self.sig = raw[:32]
+            self.payload = raw[32:]
+            self.dest.verify(sha256(self.payload), self.sig)
+        else:
+            self.dest = dest
+            self.payload = payload
+            self.data = bytearray()
+            self.data += self.dest.serialize()
+            payload_hash = sha256(self.payload)
+            self.sig = self.dest.sign(payload_hash)
+            self.data += self.payload
+
+    def serialize(self):
+        return self.data
+
+    def __str__(self):
+        return '[Datagram dlen=%d sig=%s]' % ( len(self.payload, self.sig) )
+        
+
 class i2cp_protocol(Enum):
 
     STREAMING = 6
@@ -320,11 +351,10 @@ class i2cp_payload:
             self.srcport = struct.unpack('>H', data[3:5])[0]
             self.dstport = struct.unpack('>H', data[5:7])[0]
             self.xflags = data[7]
-            #self.proto = i2cp_protocol.STREAMING
             self.proto = i2cp_protocol(data[8])
             self.data = inflate(data)
         else:
-            self.data = data
+            self.data = deflate(data)
             self.srcport = srcport
             self.dstport = dstport
             self.proto = i2cp_protocol(proto)
@@ -332,14 +362,24 @@ class i2cp_payload:
             self.xflags = 2
 
     def serialize(self):
-        pass
+        data = bytearray()
+        data += self.gz_header
+        data += struct.pack('>B', self.flags)
+        data += struct.pack('>H', self.srcport)
+        data += struct.pack('>H', self.dstport)
+        data += struct.pack('>B', self.xflags)
+        data += struct.pack('>B', self.proto.value)
+        data += self.data
+        dlen = len(self.data)
+        return struct.pack('>I', dlen) + data
 
 
     def __str__(self):
-        return '[Payload flags=%s srcport=%s dstport=%s xflags=%s proto=%s dlen=%d]' % (
+        return '[Payload flags=%s srcport=%s dstport=%s xflags=%s proto=%s data=%s]' % (
             self.flags,
             self.srcport,
             self.dstport,
             self.xflags,
             self.proto,
-            len(self.data))
+            self.data)
+
