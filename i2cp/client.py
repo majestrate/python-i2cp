@@ -92,10 +92,12 @@ class Connection(threading.Thread):
             self._handle_request_ls(raw)
         if msg.type == message_type.MessagePayload:
             msg = MessagePayloadMessage(raw=raw)
-            self.handle_payload(msg.payload)
+            self._handle_payload(msg.payload)
 
-    def handle_payload(self, data):
+    def _handle_payload(self, data):
         self._log.info('got payload: %s' % data)
+        if data.proto == i2cp_protocol.DGRAM:
+            self._handle_dgram(data.data)
 
     def send_dgram(self, dest, data):
         self._log.info('send %d bytes to %s'%(len(data), dest))
