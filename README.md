@@ -1,6 +1,9 @@
 public domain
 
-requires python 3.4 or higher
+requires:
+
+* python 3.4 or higher
+* i2p 0.9.14 or higher
 
 at the moment, no public api
 
