@@ -247,7 +247,7 @@ class MessagePayloadMessage(Message):
         data = self.body
         self.sid = struct.unpack('>H', data[:2])[0]
         self.mid = struct.unpack('>I', data[2:6])[0]
-        self.payload = i2cp_payload(raw=data[7:])
+        self.payload = i2cp_payload(raw=data[6:])
 
     def __str__(self):
         return '[MessagePayload sid=%d mid=%d payload=%s]' % (self.sid, self.mid, self.payload)

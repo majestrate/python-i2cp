@@ -1,6 +1,7 @@
 from argparse import ArgumentParser as AP
 import logging
 import time
+import os
 from .client import Connection, lookup
 from .datatypes import destination
 
@@ -10,7 +11,7 @@ def main():
     ap.add_argument('--port', type=int, default=7654)
     ap.add_argument('--debug', action='store_const', const=True, default=False)
     ap.add_argument('--keyfile', type=str, required=True)
-    ap.add_argument('--dgram', type=str, default='OMG')
+    ap.add_argument('--dgram', type=str, default='A'*100)
     ap.add_argument('--dest', type=str)
 
     args = ap.parse_args()
@@ -30,7 +31,7 @@ def main():
         'i2cp.fastReceive':'true'
     }
     c1.start_session(opts, keyfile=args.keyfile)
-    while dest:
+    while args.dest:
         c1.send_dgram(dest, dgram)
         time.sleep(1)
     

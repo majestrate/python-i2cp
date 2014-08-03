@@ -104,7 +104,7 @@ class Connection(threading.Thread):
             self._handle_request_ls(raw)
         if msg.type == message_type.MessagePayload:
             msg = MessagePayloadMessage(raw=raw)
-            self._log.debug(msg)
+            self._log.debug('handle_message: %s' % msg)
             self._handle_payload(msg.payload)
         if msg.type == message_type.HostLookupReply:
             msg = HostLookupReplyMessage(raw=raw)
@@ -124,19 +124,30 @@ class Connection(threading.Thread):
         self._pending_name_lookups[msg.rid] = hook
         self._send_raw(msg)
 
-    def _handle_payload(self, data):
-        self._log.info('got payload: %s' % data)
-        if data.proto == i2cp_protocol.DGRAM:
-            self._log.info(data.data)
-            if len(data.data) < 427:
-                self._log.warn('short packet')
-                return
-            dgram = datagram(raw=data.data)
-            self._got_dgram(dgram.dest, data.srcport, data.dstport)
+    def _handle_payload(self, payload):
+        if payload.proto == i2cp_protocol.DGRAM:
+            self._log.debug('dgram payload=%s' % payload.data)
+            dgram = datagram(raw=payload.data)
+            self._got_dgram(dgram, payload.srcport, payload.dstport)
 
 
     def send_raw(self, dest, data, srcport=0, dstport=0):
-        self.send_payload(dest, data, i2cp_protocol.RAW, srcport, dstport)
+        if isinstance(data, str):
+            data = data.encode('utf-8')
+        def runit(_dest):
+            if _dest is None:
+                self._log.warn('no such host: %s' % dest)
+                return
+            self._log.info('send %d bytes to %s'%(len(data), _dest.base32()))
+            p = i2cp_payload(proto=i2cp_protocol.RAW,srcport=srcport,dstport=dstport, data=data)
+            self._log.debug('payload=%s' % p)
+            msg = SendMessageMessage(sid=self._sid, dest=_dest, payload=p.serialize())
+            self._send_raw(msg)
+        
+        if isinstance(dest, str):
+            self._async_lookup(dest,runit)
+        else:
+            runit(dest)
 
     def send_dgram(self, dest, data, srcport=0, dstport=0):
         if isinstance(data, str):
@@ -146,8 +157,9 @@ class Connection(threading.Thread):
                 self._log.warn('no such host: %s' % dest)
                 return
             self._log.info('send %d bytes to %s'%(len(data), _dest.base32()))
-            dgram = datagram(dest=_dest, payload=data)
-            p = i2cp_payload(proto=i2cp_protocol.DGRAM,srcport=srcport,dstport=dstport, data=dgram.serialize())
+            dgram = datagram(dest=self.dest, payload=data).serialize()
+            self._log.debug('dgram=%s' % dgram)
+            p = i2cp_payload(proto=i2cp_protocol.DGRAM,srcport=srcport,dstport=dstport, data=dgram)
             self._log.debug('payload=%s' % p)
             msg = SendMessageMessage(sid=self._sid, dest=_dest, payload=p.serialize())
             self._send_raw(msg)

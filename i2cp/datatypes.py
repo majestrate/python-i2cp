@@ -110,13 +110,11 @@ class destination:
     @staticmethod
     def parse(data, b64=True):
         destination._log.debug('dest len=%d' %len(data))
-        if len(data) < 387:
-            return None, None, None
         if b64:
             data = i2p_b64decode(data)
         ctype = certificate_type(data[384])
-        clen = struct.unpack('>H', data[385:387])
-        cert = certificate(clen ,ctype, data[387:])
+        clen = struct.unpack('>H', data[385:387])[0]
+        cert = certificate(clen ,ctype, data[387:387+clen])
         enckey = data[:256]
         sigkey = data[256:384]
         if cert.type == certificate_type.NULL:
@@ -308,13 +306,20 @@ class datagram:
 
     def __init__(self, dest=None, raw=None, payload=None):
         if raw:
-            self._log.debug('raw=%s' % raw)
+            self._log.debug('rawlen=%d' % len(raw))
             self.data = raw
+            self._log.debug('load dgram data: %s' % raw)
             self.dest = destination(raw=raw)
+            self._log.debug('destlen=%s' % self.dest)
             raw = raw[len(self.dest):]
-            self.sig = raw[:32]
-            self.payload = raw[32:]
-            self.dest.verify(sha256(self.payload), self.sig)
+            self._log.debug('raw=%s' % raw)
+            self.sig = raw[:40]
+            raw = raw[40:]
+            self._log.debug('payloadlen=%d' % len(raw))
+            self.payload = raw
+            phash = sha256(self.payload)
+            self._log.debug('verify dgram: sig=%s hash=%s' % (self.sig, phash))
+            self.dest.verify(phash, self.sig)
         else:
             self.dest = dest
             self.payload = payload
@@ -322,13 +327,14 @@ class datagram:
             self.data += self.dest.serialize()
             payload_hash = sha256(self.payload)
             self.sig = self.dest.sign(payload_hash)
-            self.data += self.payload
+            self._log.debug('signature=%s' % self.sig)
+            self.data += self.sig + self.payload 
 
     def serialize(self):
         return self.data
 
     def __str__(self):
-        return '[Datagram dlen=%d sig=%s]' % ( len(self.payload, self.sig) )
+        return '[Datagram payload=%s sig=%s]' % ( self.payload, self.sig) 
         
 
 class i2cp_protocol(Enum):
@@ -346,15 +352,21 @@ class i2cp_payload:
     def __init__(self, raw=None, data=None, srcport=0, dstport=0, proto=i2cp_protocol.RAW):
         if raw:
             self.dlen = struct.unpack('>I', raw[:4])[0]
+            self._log.debug('payload len=%d' %self.dlen)
             data = raw[4:self.dlen]
+            self._log.debug('compressed payload len=%d' %len(data))
+            assert data[:3] == self.gz_header
             self.flags = data[3]
-            self.srcport = struct.unpack('>H', data[3:5])[0]
-            self.dstport = struct.unpack('>H', data[5:7])[0]
-            self.xflags = data[7]
-            self.proto = i2cp_protocol(data[8])
-            self.data = inflate(data)
+            self.srcport = struct.unpack('>H', data[4:6])[0]
+            self.dstport = struct.unpack('>H', data[6:8])[0]
+            self.xflags = data[8]
+            self.proto = i2cp_protocol(data[9])
+            self.data = i2p_decompress(data[10:])
+            self._log.debug('decompressed=%s' % self.data)
         else:
-            self.data = deflate(data)
+            self._log.debug('payload data len=%d' %len(data))
+            self.data = i2p_compress(data)
+            self._log.debug('compressed payload len=%d' % len(self.data))
             self.srcport = srcport
             self.dstport = dstport
             self.proto = i2cp_protocol(proto)
@@ -370,7 +382,8 @@ class i2cp_payload:
         data += struct.pack('>B', self.xflags)
         data += struct.pack('>B', self.proto.value)
         data += self.data
-        dlen = len(self.data)
+        dlen = len(data)
+        self._log.debug('serialize len=%d' % dlen)
         return struct.pack('>I', dlen) + data
 
 
