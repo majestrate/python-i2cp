@@ -146,6 +146,9 @@ class CreateSessionMessage(Message):
             type = message_type.CreateSession
             Message.__init__(self, type, data)
 
+    def __str__(self):
+        return '[CreateSession opts=%s]' % self.opts
+
 class RequestLSMessage(Message):
 
     _log = logging.getLogger(__name__)
@@ -157,18 +160,22 @@ class RequestLSMessage(Message):
         self.sid = struct.unpack('>H',raw[:2])
         numtun  = raw[2]
         self._log.debug('got %d leases' % numtun)
-        data = raw[3:]
+        raw = raw[3:]
         while numtun > 0:
-            ri = data[:32]
-            data = data[32:]
-            tid = struct.unpack('>I', data[:4])[0]
-            data = data[4:]
+            ri = raw[:32]
+            raw = raw[32:]
+            tid = struct.unpack('>I', raw[:4])[0]
+            raw = raw[4:]
             numtun -= 1
             self.leases.append(lease(ri_hash=ri, tid=tid))
-        self.date = date(struct.unpack('>Q', data)[0])
+        self._log.debug('left over data: %d bytes' % len(raw))
+        self.date = date(raw)
 
     def __str__(self):
-        return '[RequestLS sid=%d date=%s leases=%s]' % (self.sid,self.date, self.leases)
+        return '[RequestLS sid=%d date=%s leases=%s date=%s]' % (self.sid,
+                                                                 self.date, 
+                                                                 self.leases, 
+                                                                 self.date)
 
 class CreateLSMessage(Message):
 
@@ -181,23 +188,18 @@ class CreateLSMessage(Message):
             body = bytearray()
             body += struct.pack('>H', sid)
             body += dsa_private_key_to_bytes(sigkey)
-            self._log.debug(body)
             body += elgamal_private_key_to_bytes(enckey)
             body += leaseset.serialize()
-            self._log.debug('body=%s' % body)
             Message.__init__(self, type=message_type.CreateLS, body=body)
             self.sid = sid
-            self.sigkey = sigkey
+            self.sigkey = sigkey 
             self.enckey = enckey
             self.ls = leaseset
         
     def __str__(self):
-        return '[CreateVarLS sid=%s leasesets=%s sigkey=%s enckey=%s]' % (
+        return '[CreateLS sid=%s leasesets=%s]' % (
             self.sid, 
-            self.ls, 
-            dsa_public_key_to_bytes(self.sigkey), 
-            elgamal_public_key_to_bytes(self.enckey))
-
+            self.ls)
 
 class DisconnectMessage(Message):
 

@@ -45,6 +45,7 @@ class Connection:
             self._handle_request_ls(raw)
         elif msg.type == message_type.SessionStatus:
             msg = SessionStatusMessage(raw=raw)
+            self._log.debug('session status: %s' % msg)
             self.sid = msg.sid
             if msg.status == session_status.REFUSED:
                 self._log.error('session rejected')
@@ -60,11 +61,13 @@ class Connection:
     def _handle_request_ls(self, raw):
         msg = RequestLSMessage(raw=raw)
         l = msg.leases[0]
-        ls = leaseset(leases=[l],dest=self.dest, ls_enckey=self.dest.enckey, ls_sigkey=self.dest.sigkey)
+        enckey = ElGamalGenerate()
+        sigkey = DSAGenerate()
+        ls = leaseset(leases=[l],dest=self.dest, ls_enckey=enckey, ls_sigkey=sigkey)
         msg = CreateLSMessage(
             sid=self.sid,
-            sigkey=self.dest.sigkey,
-            enckey=self.dest.enckey,
+            sigkey=sigkey,
+            enckey=enckey,
             leaseset=ls)
         self._log.debug(msg)
         self._send_raw(msg)

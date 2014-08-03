@@ -18,7 +18,7 @@ class certificate_type(Enum):
 
 class certificate:
 
-    _log = logging.getLogger(__name__)
+    _log = logging.getLogger('certificate')
 
     def __init__(self, dlen=0, type=certificate_type.NULL, data=bytearray(), b64=True, raw=None):
         if raw:
@@ -43,7 +43,7 @@ class certificate:
     def serialize(self, b64=False):
         data = bytearray()
         data += struct.pack('>H', len(self.data))
-        data += struct.pack('B', self.type.value)
+        data += struct.pack('>B', self.type.value)
         data += self.data
         if b64:
             data = i2p_b64_encode(data)
@@ -100,21 +100,22 @@ class leaseset:
         for l in self.leases:
             data += l.serialize()
         sig = self.dest.sign(data)
+        self.dest.verify(data, sig)
         return data + sig
 
 class destination:
 
-    _log = logging.getLogger(__name__)
+    _log = logging.getLogger('destination')
 
     @staticmethod
     def parse(data, b64=True):
-        if not b64:
-            data = i2p_b64encode(data)
+        if b64:
+            data = i2p_b64decode(data)
         ctype = certificate_type(data[384])
-        clen = struct.unpack('>H', i2p_b64decode(data[385:368]))
+        clen = struct.unpack('>H', data[385:368])
         cert = certificate(clen ,ctype, data)
         if cert.type == certificate_type.NULL:
-            return ElGamalPublicKey(i2p_b64decode(data[:255])), DSAPublicKey(i2p_b64decode(data[255:383])), cert
+            return ElGamalPublicKey(data[:255]), DSAPublicKey(data[255:383]), cert
         
 
     @staticmethod
@@ -136,13 +137,19 @@ class destination:
 
     def __init__(self, enckey=None, sigkey=None, cert=None, raw=None):
         if raw:
-            enckey, sigkey, cert = self.parse(raw)
-        self.enckey = enckey or ElGamalPublicKey()
-        self.sigkey = sigkey or DSAPublicKey()
-        self.cert = cert or certificate()
+            enckey, sigkey, cert = self.parse(raw, False)
+        self.enckey = enckey 
+        self.sigkey = sigkey 
+        self.cert = cert 
 
     def sign(self, data):
-        return self.sigkey.sign(data)
+        sig = DSA_SHA1_SIGN(self.sigkey, data)
+        self._log.debug('sign data=%s sig=%s' % (data, sig))
+        return sig
+        
+    def verify(self, data, sig):
+        self._log.debug('verify data=%s sig=%s' % (data, sig))
+        DSA_SHA1_VERIFY(self.sigkey, data, sig)
 
     def __len__(self):
         return len(self.serialize())
@@ -170,8 +177,6 @@ class destination:
         return i2p_b64encode(self.serialize())
 
 class i2p_string:
-
-    _log = logging.getLogger()
 
     @staticmethod
     def parse(data):
@@ -217,15 +222,19 @@ class router_identity:
 
 class lease:
 
-    def __init__(self, raw=None, ri_hash=None, tid=None):
-        if raw:
-            self.data = raw
-        else:
-            self.ri = ri_hash
-            self.tid = tid
-            self.data = bytearray()
-            self.data += ri_hash
-            self.data += struct.pack('>I', tid)
+    _log = logging.getLogger('lease')
+    
+    def __init__(self, ri_hash=None, tid=None):
+        self.ri = ri_hash
+        self.tid = tid
+        self.data = bytearray()
+        self._log.debug('ri_hash %d bytes'%len(ri_hash))
+        assert len(ri_hash) == 32
+        self.data += ri_hash
+        self.data += struct.pack('>I', tid)
+        self.data += date()
+        self._log.debug('lease is %d bytes' % len(self.data))
+        assert len(self.data) == 44
         
     def serialize(self):
         return self.data
@@ -241,13 +250,13 @@ class mapping:
     it sucks
     """
 
-    _log = logging.getLogger(__name__)
+    _log = logging.getLogger('mapping')
 
     def __init__(self, opts=None, raw=None):
         if raw:
             self.data = raw
             self.opts = {}
-            dlen = struct.unpack('H', raw[:2])
+            dlen = struct.unpack('>H', raw[:2])
             data = raw[2:2+dlen]
             while dlen > 0:
                 key = i2p_string.parse(data)
@@ -276,6 +285,8 @@ class mapping:
         return str(self.opts)
                 
 def date(num=None):
+    if isinstance(num, bytes):
+        num = struct.unpack('>Q', num)[0]
     if num is None:
         num = time.time() * 1000
     num = int(num)
