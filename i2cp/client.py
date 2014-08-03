@@ -1,11 +1,13 @@
-import socket
 import logging
+import os
+import socket
+import threading
 from .exceptions import *
 from .messages import *
 from .datatypes import *
 from .util import *
 
-class Connection:
+class Connection(threading.Thread):
 
     def __init__(self, i2cp_host='127.0.0.1', i2cp_port=7654):
         self._i2cp_addr = (i2cp_host, i2cp_port)
@@ -13,6 +15,7 @@ class Connection:
         self._log = logging.getLogger('I2CP-Connection-%s-%d' % self._i2cp_addr)
         self._sid = None
         self.dest = None
+        threading.Thread.__init__(self)
 
     def open(self):
         self._log.info('connecting...')
@@ -20,7 +23,8 @@ class Connection:
         self._send_raw(PROTOCOL_VERSION)
         
     def generate_dest(self, keyfile):
-        destination.generate(keyfile)
+        if not os.path.exists(keyfile):
+            destination.generate(keyfile)
         self.dest = destination.load(keyfile)
     
     def recv_msg(self):
@@ -33,6 +37,7 @@ class Connection:
     def start_session(self, opts, keyfile='keys.dat'):
         if self.dest is None:
             self.generate_dest(keyfile)
+        self._log.info('out dest is %s' % self.dest.base32())
         msg = Message(message_type.GetDate)
         self._send_raw(msg)
         msg, raw = self.recv_msg()
@@ -57,6 +62,7 @@ class Connection:
                 self._handle_request_ls(raw)
         else:
             self.close()
+        self.start()
         
     def _handle_request_ls(self, raw):
         msg = RequestLSMessage(raw=raw)
@@ -78,12 +84,23 @@ class Connection:
             if data is None: 
                 break
             msg = Message(raw=data)
-            self.handle_message(data, msg)
+            self._handle_message(data, msg)
     
-    def handle_message(self, raw, msg):
-        self._log.debug('client got message: %s' % msg)
+    def _handle_message(self, raw, msg):
+        self._log.info('client got %s message' % msg.type.name)
         if msg.type == message_type.RequestLS:
             self._handle_request_ls(raw)
+        if msg.type == message_type.MessagePayload:
+            msg = MessagePayloadMessage(raw=raw)
+            self.handle_payload(msg.payload)
+
+    def handle_payload(self, data):
+        self._log.info('got payload: %s' % data)
+
+    def send_dgram(self, dest, data):
+        self._log.info('send %d bytes to %s'%(len(data), dest))
+        dest = destination(raw=dest, b64=True)
+        self._log.debug(dest)
 
 
     def _recv_raw(self, dlen=BUFFER_SIZE):

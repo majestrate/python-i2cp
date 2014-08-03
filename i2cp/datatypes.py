@@ -4,7 +4,7 @@ from enum import Enum
 import logging
 import struct
 import time
-
+import zlib
 
 
 
@@ -291,3 +291,48 @@ def date(num=None):
         num = time.time() * 1000
     num = int(num)
     return struct.pack('>Q', num)
+
+
+class i2cp_protocol(Enum):
+
+    STREAMING = 6
+    DGRAM = 17
+    RAW = 18
+
+class i2cp_payload:
+
+    gz_header = b'\x1f\x8b\x08'
+
+    _log = logging.getLogger('i2cp_payload')
+
+    def __init__(self, raw=None, data=None, srcport=0, dstport=0, proto=i2cp_protocol.RAW):
+        if raw:
+            self.dlen = struct.unpack('>I', raw[:4])[0]
+            data = raw[4:self.dlen]
+            self.flags = data[3]
+            self.srcport = struct.unpack('>H', data[3:5])[0]
+            self.dstport = struct.unpack('>H', data[5:7])[0]
+            self.xflags = data[7]
+            #self.proto = i2cp_protocol.STREAMING
+            self.proto = i2cp_protocol(data[8])
+            self.data = inflate(data)
+        else:
+            self.data = data
+            self.srcport = srcport
+            self.dstport = dstport
+            self.proto = i2cp_protocol(proto)
+            self.flags = 0
+            self.xflags = 2
+
+    def serialize(self):
+        pass
+
+
+    def __str__(self):
+        return '[Payload flags=%s srcport=%s dstport=%s xflags=%s proto=%s dlen=%d]' % (
+            self.flags,
+            self.srcport,
+            self.dstport,
+            self.xflags,
+            self.proto,
+            len(self.data))

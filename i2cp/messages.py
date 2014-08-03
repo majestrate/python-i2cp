@@ -221,7 +221,7 @@ class session_status(Enum):
 
 class SessionStatusMessage(Message):
     
-    _log = logging.getLogger(__name__)
+    _log = logging.getLogger('SessionStatus')
 
     def __init__(self, raw):
         Message.__init__(self, raw=raw)
@@ -233,6 +233,20 @@ class SessionStatusMessage(Message):
     def __str__(self):
         return '[SessionStatus sid=%d status=%s]' % (self.sid, self.status.name)
 
+
+class MessagePayloadMessage(Message):
+
+    _log = logging.getLogger('MessagePayload')
+
+    def __init__(self, raw):
+        Message.__init__(self,raw=raw)
+        data = self.body
+        self.sid = struct.unpack('>H', data[:2])
+        self.mid = struct.unpack('>I', data[2:6])
+        self.payload = i2cp_payload(raw=data[7:])
+
+    def __str__(self):
+        return '[MessagePayload sid=%d mid=%d payload=%s]' % (self.sid, self.mid, self.payload)
 
 class SendMessageMessage(Message):
 
