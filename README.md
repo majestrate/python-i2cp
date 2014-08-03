@@ -1,3 +1,5 @@
+public domain
+
 requires python 3.4 or higher
 
 at the moment, no public api
