@@ -29,7 +29,7 @@ class certificate:
             if isinstance(type, str):
                 type = type.encode('ascii')
             if isinstance(type, bytes):
-                type = certificate_type(i2p_b64decode(type))
+                type = certificate_type(type)
             if b64:
                 data = i2p_b64decode(data)
             self.data = data
@@ -109,13 +109,16 @@ class destination:
 
     @staticmethod
     def parse(data, b64=True):
+        destination._log.debug('dest len=%d' %len(data))
         if b64:
             data = i2p_b64decode(data)
         ctype = certificate_type(data[384])
-        clen = struct.unpack('>H', data[385:368])
-        cert = certificate(clen ,ctype, data)
+        clen = struct.unpack('>H', data[385:387])
+        cert = certificate(clen ,ctype, data[387:])
+        enckey = data[:256]
+        sigkey = data[256:384]
         if cert.type == certificate_type.NULL:
-            return ElGamalPublicKey(data[:255]), DSAPublicKey(data[255:383]), cert
+            return ElGamalPublicKey(enckey), DSAPublicKey(sigkey), cert
         
 
     @staticmethod
@@ -133,11 +136,15 @@ class destination:
         return destination(enckey, sigkey, cert)
 
     def __str__(self):
-        return '[Destination %s %s]' % (self.base32(), self.base64())
+        return '[Destination %s %s enckey=%s sigkey=%s cert=%s]' % (
+            self.base32(), self.base64(),
+            elgamal_public_key_to_bytes(self.enckey),
+            dsa_public_key_to_bytes(self.sigkey),
+            self.cert)
 
-    def __init__(self, enckey=None, sigkey=None, cert=None, raw=None):
+    def __init__(self, enckey=None, sigkey=None, cert=None, raw=None, b64=False):
         if raw:
-            enckey, sigkey, cert = self.parse(raw, False)
+            enckey, sigkey, cert = self.parse(raw, b64)
         self.enckey = enckey 
         self.sigkey = sigkey 
         self.cert = cert 
@@ -159,7 +166,7 @@ class destination:
         data += elgamal_public_key_to_bytes(self.enckey)
         data += dsa_public_key_to_bytes(self.sigkey)
         data += self.cert.serialize()
-        return i2p_b32encode(sha256(data))
+        return i2p_b32encode(sha256(data)).decode('ascii')
 
     def sign(self, data):
         return DSA_SHA1_SIGN(self.sigkey, data)
@@ -174,7 +181,7 @@ class destination:
         return data
 
     def base64(self):
-        return i2p_b64encode(self.serialize())
+        return i2p_b64encode(self.serialize()).decode('ascii')
 
 class i2p_string:
 

@@ -81,50 +81,51 @@ class HostLookupMessage(Message):
     """
 
 
-    def __init__(self, name=None, sid=None, reqid=None, raw=None, req_timeout=5.0):
+    def __init__(self, name=None, sid=None, rid=None, raw=None, req_timeout=5.0):
         if raw:
-            Message.__init__(self, raw=raw)
-            self.sid = struct.unpack('>H', self.body[2:])
-            self.reqid = struct.unpack('>I', self.body[3:7])
-            self.reqtype = self.body[8]
-            self.timeout = -1
-            if self.reqtype == 0:
-                self.name = hash_to_b32(body[9:41])
-            else:
-                self.name = i2cp_string.parse(body[9:])
+            raise NotImplemented()
         else:    
             self.name = name
-            self.timeout = req_timeout
+            if isinstance(req_timeout, float):
+                req_timeout *= 1000
+            self.timeout = int(req_timeout)
             self.sid = sid or NO_SESSION_ID
-            self.reqid = reqid or random.randint(1, 2 ** 16)
+            self.rid = rid or random().randint(1, 2 ** 16)
             body = bytearray()
             body += struct.pack('>H', self.sid)
-            body += timeout(req_timeout)
+            body += struct.pack('>I', self.rid)
+            body += struct.pack('>I', self.timeout)
+            self.req_type = 1
             if isdesthash(name):
-                body += struct.pack('>I', 0)
-                body += b32_to_bytes(name)
+                name = b32_to_bytes(name)
             else:
-                body += struct.pack('>I', 1)
-                body += i2cp_string.create(name)
-            Message.__init__(self, message_type.HostLookup, body)
+                name = i2p_string.create(name)
+
+            body += struct.pack('>B', self.req_type)
+            body += name
+            Message.__init__(self, type=message_type.HostLookup, body=body)
         
 
     def __str__(self):
-        return '[HostLookupMessage reqid=%d sid=%d timeout=%f name=%s]' % (
-            self.reqid, self.sid, self.timeout, self.name)
+        return '[HostLookupMessage reqid=%d sid=%d timeout=%dms name=%s reqtype=%d]' % (
+            self.rid, self.sid, self.timeout, self.name, self.req_type)
 
 class HostLookupReplyMessage(Message):
 
     def __init__(self, name=None, sid=None, raw=None):
         if raw:
-            Message.__init__(self, raw)
-            self.sid = struct.unpack('>H', self.body[:2])
-            self.reqid = struct.unpack('>I', self.body[3:7])
-            code = self.body[8]
-            if code == 0:
-                self.dest = destination(self.body[:9])
+            Message.__init__(self, raw=raw)
+            self.sid = struct.unpack('>H', self.body[:2])[0]
+            self.rid = struct.unpack('>I', self.body[2:6])[0]
+            self.code = self.body[6]
+            self.dest = None
+            if self.code == 0:
+                self.dest = destination(raw=self.body[7:],b64=False)
         else:
             raise NotImplemented()
+
+    def __str__(self):
+        return '[HostLookupReply sid=%d rid=%d code=%d]' % (self.sid, self.rid, self.code)
 
 
 class CreateSessionMessage(Message):
@@ -203,9 +204,13 @@ class CreateLSMessage(Message):
 
 class DisconnectMessage(Message):
 
-    def __init__(self, reason='kthnxbai'):
-        Message.__init__(self, message_type.Disconnect, i2p_string.create(reason))
-        self.reason = reason
+    def __init__(self, raw=None, reason='kthnxbai'):
+        if raw:
+            Message.__init__(self, raw=raw)
+            self.reason = i2p_string.parse(self.body)
+        else:
+            Message.__init__(self, message_type.Disconnect, i2p_string.create(reason))
+            self.reason = reason
 
     def __str__(self):
         return '[Disconnect %s]' % self.reason

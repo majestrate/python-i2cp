@@ -18,7 +18,7 @@ class Connection(threading.Thread):
         threading.Thread.__init__(self)
 
     def open(self):
-        self._log.info('connecting...')
+        self._log.debug('connecting...')
         self._sock.connect(self._i2cp_addr)
         self._send_raw(PROTOCOL_VERSION)
         
@@ -27,7 +27,7 @@ class Connection(threading.Thread):
             destination.generate(keyfile)
         self.dest = destination.load(keyfile)
     
-    def recv_msg(self):
+    def _recv_msg(self):
         raw = self._recv_raw()
         msg = Message(raw=raw)
         self._log.debug('got message: %s' %msg)
@@ -40,12 +40,12 @@ class Connection(threading.Thread):
         self._log.info('out dest is %s' % self.dest.base32())
         msg = Message(message_type.GetDate)
         self._send_raw(msg)
-        msg, raw = self.recv_msg()
+        msg, raw = self._recv_msg()
         if msg.type != message_type.SetDate:
             raise I2CPException('expected SetDate Message but got %s Message' % msg.type.name)
         msg = CreateSessionMessage(dest=self.dest, opts=opts, date=date())
         self._send_raw(msg)
-        msg, raw = self.recv_msg()
+        msg, raw = self._recv_msg()
         if msg.type == message_type.RequestLS:
             self._handle_request_ls(raw)
         elif msg.type == message_type.SessionStatus:
@@ -58,7 +58,7 @@ class Connection(threading.Thread):
                 self._log.error('session destroyed')
             elif msg.status == session_status.CREATED:
                 self.sid = msg.sid
-                msg, raw = self.recv_msg()
+                msg, raw = self._recv_msg()
                 self._handle_request_ls(raw)
         else:
             self.close()
@@ -100,6 +100,8 @@ class Connection(threading.Thread):
             self._handle_dgram(data.data)
 
     def send_dgram(self, dest, data):
+        if isinstance(dest, str):
+            dest = self.lookup(dest)
         self._log.info('send %d bytes to %s'%(len(data), dest))
         dest = destination(raw=dest, b64=True)
         self._log.debug(dest)
@@ -134,21 +136,25 @@ class Connection(threading.Thread):
             self._log.debug('sent %d bytes' % sent)
 
     def lookup(self, name):
-        msg = HostLookupMessage(name, self._sid)
+        if not name.endswith('.i2p'):
+            return destination(name, b64=True)
+        msg = HostLookupMessage(name=name, sid=self._sid)
         self._send_raw(msg)
-        data = self._recv_raw()
-        msg = Message(raw=data)
+        msg, raw = self._recv_msg()
         if msg.type == message_type.Disconnect:
-            raise I2CPException(msg.body.decode('utf-8'))
+            msg = DisconnectMessage(raw=raw)
+            raise I2CPException(msg.reason)
         elif msg.type == message_type.HostLookupReply:
-            return HostLookupReplyMessage(raw=data).dest
+            msg = HostLookupReplyMessage(raw=raw)
+            self._log.debug(msg)
+            return msg.dest
             
         
 
     def close(self):
         if self._sock is None:
             return
-        self._log.info('closing connection...')
+        self._log.debug('closing connection...')
         msg = Message(message_type.Disconnect)
         self._send_raw(msg)
         self._sock.close()

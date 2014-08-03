@@ -33,8 +33,6 @@ def ElGamalPublicKey(data=None):
     """
     parse ElGamal PublicKey from raw data
     """
-    if data is None:
-        data = b'\x00' * 256
     return ElGamalKey(int.from_bytes(data,'big'))
 
 def ElGamalGenerate():
