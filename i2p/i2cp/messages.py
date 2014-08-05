@@ -2,6 +2,7 @@ from __future__ import unicode_literals
 from __future__ import print_function
 from __future__ import division
 from __future__ import absolute_import
+from future.builtins import bytes
 from future.builtins import int
 from future import standard_library
 standard_library.install_hooks()
@@ -57,7 +58,7 @@ class Message(object):
         """
         raw = fd.read(5)
         _len, _type = struct.unpack('>IB', raw)
-        _data = fd.read(_len)
+        _data = bytes(fd.read(_len))
         if parts:
             return message_type(_type), _data
         return Message(type=message_type(_type), body=_data), raw + _data
