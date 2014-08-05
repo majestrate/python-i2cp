@@ -50,13 +50,13 @@ def gen_elgamal_key(fname=None,fd=None):
     doclose = fd is None
     if doclose:
         fd = open(fname, 'wb')
-        
+
     fd.write(key.y.to_bytes(256, 'big'))
     fd.write(key.x.to_bytes(256, 'big'))
-        
+
     if doclose:
         fd.close()
-    
+
 
 def elgamal_public_key_to_bytes(key):
     return key.y.to_bytes(256, 'big')
@@ -125,7 +125,7 @@ def gen_dsa_key(fname=None,fd=None):
     nofname = fd is None
     if nofname:
         fd = open(fname, 'wb')
-        
+
     y, x = dsakey.y , dsakey.x
     fd.write(y.to_bytes(128, 'big'))
     fd.write(x.to_bytes(128, 'big'))
@@ -145,7 +145,7 @@ def dump_keypair(enckey, sigkey, fd):
     fd.write(enckey.x.to_bytes(256,'big'))
     fd.write(sigkey.y.to_bytes(128,'big'))
     fd.write(sigkey.x.to_bytes(128,'big'))
-    
+
 
 def load_keypair(fd):
     enckey = ElGamalKey(fd=fd)

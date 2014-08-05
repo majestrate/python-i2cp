@@ -15,7 +15,7 @@ def main():
     ap.add_argument('--dest', type=str)
 
     args = ap.parse_args()
-    
+
     loglvl = args.debug and logging.DEBUG or logging.INFO
     format='%(levelname)s [%(asctime)s] || %(message)s'
     logging.basicConfig(level=loglvl)
@@ -34,7 +34,7 @@ def main():
     while args.dest:
         c1.send_dgram(dest, dgram)
         time.sleep(1)
-    
-    
+
+
 if __name__ == '__main__':
     main()

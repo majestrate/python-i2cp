@@ -34,14 +34,14 @@ def b32_to_bytes(data):
 def i2p_compress(data):
     #_compress = zlib.compressobj(
     #        2,
-    #        zlib.DEFLATED,        
-    #        -zlib.MAX_WBITS,      
-    #        zlib.DEF_MEM_LEVEL,  
+    #        zlib.DEFLATED,
+    #        -zlib.MAX_WBITS,
+    #        zlib.DEF_MEM_LEVEL,
     #        0)
     return zlib.compress(data)[2:]
     #deflated += _compress.flush()
     #return deflated
- 
+
 def i2p_decompress(data):
     decompress = zlib.decompressobj(
             -zlib.MAX_WBITS
