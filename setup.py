@@ -1,10 +1,10 @@
 from setuptools import setup
 
 
-with open('README.rst', 'rb') as infile:
+with open('README.rst', 'r') as infile:
     long_description = infile.read()
 
-with open('requirements.txt', 'rb') as infile:
+with open('requirements.txt', 'r') as infile:
     install_requires = infile.read().split()
 
 setup(
