@@ -80,7 +80,11 @@ class Message(object):
         return hdr + self.body
 
     def __str__(self):
-        return '[I2CPMessage type=%s body=%s]' % (self.type.name, self.body)
+        try:
+            return '[I2CPMessage type=%s body=%s]' % (self.type.name, self.body)
+        except UnicodeDecodeError:
+            # TODO Fix for Python 2
+            return '[I2CPMessage type=%s]' % (self.type.name)
 
 class HostLookupMessage(Message):
     """

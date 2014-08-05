@@ -197,7 +197,11 @@ class Connection(threading.Thread):
         elif isinstance(data, Message):
             self._log.debug('send message: %s' % data)
             data = data.serialize()
-        self._log.debug('--> %s' % data)
+        try:
+            self._log.debug('--> %s' % data)
+        except UnicodeDecodeError:
+            # TODO Fix for Python 2
+            pass
         self._send_lock.acquire()
         try:
             sent = self._sock.send(data)
