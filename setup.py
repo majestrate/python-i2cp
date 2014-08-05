@@ -29,6 +29,6 @@ setup(
     vcversioner={
         'version_module_paths': ['i2p/i2cp/_version.py'],
     },
-    install_requires=install_requires,
+    #install_requires=install_requires,
     packages=['i2p.i2cp'],
 )
