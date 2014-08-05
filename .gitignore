@@ -1,2 +1,4 @@
 *.pyc
 *~
+_version.py
+version.txt
