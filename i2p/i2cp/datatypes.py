@@ -1,3 +1,14 @@
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
+from future.builtins import int
+from future.builtins import open
+from future.builtins import str
+from future import standard_library
+standard_library.install_hooks()
+from future.builtins import object
+
 from .util import *
 from .crypto import *
 from enum import Enum
@@ -16,7 +27,7 @@ class certificate_type(Enum):
     MULTI = 4
     KEY = 5
 
-class certificate:
+class certificate(object):
 
     _log = logging.getLogger('certificate')
 
@@ -49,7 +60,7 @@ class certificate:
             data = i2p_b64_encode(data)
         return data
 
-class leaseset:
+class leaseset(object):
 
     _log = logging.getLogger('leaseset')
 
@@ -103,7 +114,7 @@ class leaseset:
         self.dest.verify(data, sig)
         return data + sig
 
-class destination:
+class destination(object):
 
     _log = logging.getLogger('destination')
 
@@ -183,7 +194,7 @@ class destination:
     def base64(self):
         return i2p_b64encode(self.serialize()).decode('ascii')
 
-class i2p_string:
+class i2p_string(object):
 
     @staticmethod
     def parse(data):
@@ -199,7 +210,7 @@ class i2p_string:
         dlen = len(data)
         return struct.pack('>B', dlen) + data
 
-class router_identity:
+class router_identity(object):
 
     def __init__(self, raw=None, enckey=None, sigkey=None, cert=None):
         if raw:
@@ -227,7 +238,7 @@ class router_identity:
         data += self.cert.serialize()
         return data
 
-class lease:
+class lease(object):
 
     _log = logging.getLogger('lease')
 
@@ -251,7 +262,7 @@ class lease:
 
 
 
-class mapping:
+class mapping(object):
     """
     i2p dictionary object
     it sucks
@@ -300,7 +311,7 @@ def date(num=None):
     return struct.pack('>Q', num)
 
 
-class datagram:
+class datagram(object):
 
     _log = logging.getLogger('datagram')
 
@@ -343,7 +354,7 @@ class i2cp_protocol(Enum):
     DGRAM = 17
     RAW = 18
 
-class i2cp_payload:
+class i2cp_payload(object):
 
     gz_header = b'\x1f\x8b\x08'
 
