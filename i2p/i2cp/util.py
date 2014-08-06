@@ -1,3 +1,11 @@
+from __future__ import print_function
+from __future__ import unicode_literals
+from __future__ import division
+from __future__ import absolute_import
+from future.builtins import int
+from future import standard_library
+standard_library.install_hooks()
+
 import base64
 import struct
 import zlib
@@ -34,14 +42,14 @@ def b32_to_bytes(data):
 def i2p_compress(data):
     #_compress = zlib.compressobj(
     #        2,
-    #        zlib.DEFLATED,        
-    #        -zlib.MAX_WBITS,      
-    #        zlib.DEF_MEM_LEVEL,  
+    #        zlib.DEFLATED,
+    #        -zlib.MAX_WBITS,
+    #        zlib.DEF_MEM_LEVEL,
     #        0)
     return zlib.compress(data)[2:]
     #deflated += _compress.flush()
     #return deflated
- 
+
 def i2p_decompress(data):
     decompress = zlib.decompressobj(
             -zlib.MAX_WBITS

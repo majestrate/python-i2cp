@@ -1,12 +1,11 @@
 from setuptools import setup
 
 
-with open('README.rst', 'rb') as infile:
+with open('README.rst', 'r') as infile:
     long_description = infile.read()
 
-# No requirements yet
-#with open('requirements.txt', 'rb') as infile:
-#    install_requires = infile.read().split()
+with open('requirements.txt', 'r') as infile:
+    install_requires = infile.read().split()
 
 setup(
     name='i2p.i2cp',
@@ -24,11 +23,11 @@ setup(
         'Topic :: Internet',
     ],
     license='Public Domain',
-
-    setup_requires=['vcversioner>=1'],
-    vcversioner={
-        'version_module_paths': ['i2p/i2cp/_version.py'],
-    },
+    version='0.0.0',
+    #setup_requires=['vcversioner>=1'],
+    #vcversioner={
+    #    'version_module_paths': ['i2p/i2cp/_version.py'],
+    #},
     #install_requires=install_requires,
     packages=['i2p.i2cp'],
 )

@@ -1,3 +1,10 @@
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_hooks()
+
 import logging
 import os
 import socket
@@ -26,12 +33,12 @@ class Connection(threading.Thread):
         self._log.debug('connecting...')
         self._sock.connect(self._i2cp_addr)
         self._send_raw(PROTOCOL_VERSION)
-        
+
     def generate_dest(self, keyfile):
         if not os.path.exists(keyfile):
             destination.generate(keyfile)
         self.dest = destination.load(keyfile)
-    
+
     def _recv_msg(self):
         sfd = self._sock.makefile('rb')
         msg, raw = Message.parse(sfd, parts=False)
@@ -39,7 +46,7 @@ class Connection(threading.Thread):
         self._log.debug('got message: %s' %msg)
         return msg, raw
 
-        
+
     def start_session(self, opts, keyfile='keys.dat'):
         if self.dest is None:
             self.generate_dest(keyfile)
@@ -69,7 +76,7 @@ class Connection(threading.Thread):
         else:
             self.close()
         self.start()
-        
+
     def _handle_request_ls(self, raw):
         msg = RequestLSMessage(raw=raw)
         l = msg.leases[0]
@@ -83,15 +90,15 @@ class Connection(threading.Thread):
             leaseset=ls)
         self._log.debug(msg)
         self._send_raw(msg)
-        
+
     def run(self):
         while True:
             data = self._recv_raw()
-            if data is None: 
+            if data is None:
                 break
             msg = Message(raw=data)
             self._handle_message(data, msg)
-    
+
     def _handle_message(self, raw, msg):
         if msg is None or msg.type is None:
             self._log.warn('bad message')
@@ -117,7 +124,7 @@ class Connection(threading.Thread):
     def _host_not_found(self, rid):
         if rid in self._pending_name_lookups:
             self._pending_name_lookups.pop(rid)(None)
-        
+
 
     def _async_lookup(self, name, hook):
         msg = HostLookupMessage(name=name, sid=self._sid)
@@ -143,7 +150,7 @@ class Connection(threading.Thread):
             self._log.debug('payload=%s' % p)
             msg = SendMessageMessage(sid=self._sid, dest=_dest, payload=p.serialize())
             self._send_raw(msg)
-        
+
         if isinstance(dest, str):
             self._async_lookup(dest,runit)
         else:
@@ -163,7 +170,7 @@ class Connection(threading.Thread):
             self._log.debug('payload=%s' % p)
             msg = SendMessageMessage(sid=self._sid, dest=_dest, payload=p.serialize())
             self._send_raw(msg)
-        
+
         if isinstance(dest, str):
             self._async_lookup(dest,runit)
         else:
@@ -190,7 +197,11 @@ class Connection(threading.Thread):
         elif isinstance(data, Message):
             self._log.debug('send message: %s' % data)
             data = data.serialize()
-        self._log.debug('--> %s' % data)
+        try:
+            self._log.debug('--> %s' % data)
+        except UnicodeDecodeError:
+            # TODO Fix for Python 2
+            pass
         self._send_lock.acquire()
         try:
             sent = self._sock.send(data)
@@ -226,4 +237,4 @@ def lookup(name, i2cp_host='127.0.0.1', i2cp_port=7654):
         dest = msg.dest
     c.close()
     return dest
-        
+

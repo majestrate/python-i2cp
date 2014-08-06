@@ -1,3 +1,14 @@
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
+from future.builtins import int
+from future.builtins import open
+from future.builtins import str
+from future import standard_library
+standard_library.install_hooks()
+from future.builtins import object
+
 from .util import *
 from .crypto import *
 from enum import Enum
@@ -16,7 +27,7 @@ class certificate_type(Enum):
     MULTI = 4
     KEY = 5
 
-class certificate:
+class certificate(object):
 
     _log = logging.getLogger('certificate')
 
@@ -36,7 +47,7 @@ class certificate:
             self.type = type
         self._log.debug('type=%s data=%s' % (type.name, i2p_b64encode(data)))
 
-             
+
     def __str__(self):
         return '[cert type=%s data=%s]' % (self.type.name, self.data)
 
@@ -48,8 +59,8 @@ class certificate:
         if b64:
             data = i2p_b64_encode(data)
         return data
-        
-class leaseset:
+
+class leaseset(object):
 
     _log = logging.getLogger('leaseset')
 
@@ -75,16 +86,16 @@ class leaseset:
             self.sig = raw[:-40]
             self.dest.sigkey.verify(raw[-40:], self.sig)
         else:
-            self.dest = dest 
-            self.enckey = ls_enckey 
-            self.sigkey = ls_sigkey 
+            self.dest = dest
+            self.enckey = ls_enckey
+            self.sigkey = ls_sigkey
             self.leases = list(leases)
-            
+
     def __str__(self):
         return '[LeaseSet leases=%s enckey=%s sigkey=%s dest=%s]' % (
-            self.leases, 
-            elgamal_public_key_to_bytes(self.enckey), 
-            dsa_public_key_to_bytes(self.sigkey), 
+            self.leases,
+            elgamal_public_key_to_bytes(self.enckey),
+            dsa_public_key_to_bytes(self.sigkey),
             self.dest)
 
     def serialize(self):
@@ -103,7 +114,7 @@ class leaseset:
         self.dest.verify(data, sig)
         return data + sig
 
-class destination:
+class destination(object):
 
     _log = logging.getLogger('destination')
 
@@ -119,7 +130,7 @@ class destination:
         sigkey = data[256:384]
         if cert.type == certificate_type.NULL:
             return ElGamalPublicKey(enckey), DSAPublicKey(sigkey), cert
-        
+
 
     @staticmethod
     def generate(fname):
@@ -145,15 +156,15 @@ class destination:
     def __init__(self, enckey=None, sigkey=None, cert=None, raw=None, b64=False):
         if raw:
             enckey, sigkey, cert = self.parse(raw, b64)
-        self.enckey = enckey 
-        self.sigkey = sigkey 
-        self.cert = cert 
+        self.enckey = enckey
+        self.sigkey = sigkey
+        self.cert = cert
 
     def sign(self, data):
         sig = DSA_SHA1_SIGN(self.sigkey, data)
         self._log.debug('sign data=%s sig=%s' % (data, sig))
         return sig
-        
+
     def verify(self, data, sig):
         self._log.debug('verify data=%s sig=%s' % (data, sig))
         DSA_SHA1_VERIFY(self.sigkey, data, sig)
@@ -170,20 +181,20 @@ class destination:
 
     def sign(self, data):
         return DSA_SHA1_SIGN(self.sigkey, data)
-        
+
     def serialize(self):
         data = bytearray()
         if self.cert.type == certificate_type.NULL:
             data += elgamal_public_key_to_bytes(self.enckey)
             data += dsa_public_key_to_bytes(self.sigkey)
-            data += self.cert.serialize()        
+            data += self.cert.serialize()
         self._log.debug('serialize len=%d' % len(data))
         return data
 
     def base64(self):
         return i2p_b64encode(self.serialize()).decode('ascii')
 
-class i2p_string:
+class i2p_string(object):
 
     @staticmethod
     def parse(data):
@@ -199,7 +210,7 @@ class i2p_string:
         dlen = len(data)
         return struct.pack('>B', dlen) + data
 
-class router_identity:
+class router_identity(object):
 
     def __init__(self, raw=None, enckey=None, sigkey=None, cert=None):
         if raw:
@@ -207,9 +218,9 @@ class router_identity:
             self.sigkey = DSAPublicKey(raw[256:384])
             self.cert = certificate(raw[384:])
         else:
-            self.enckey = enckey 
-            self.sigkey = sigkey 
-            self.cert = cert 
+            self.enckey = enckey
+            self.sigkey = sigkey
+            self.cert = cert
 
     def __len__(self):
         return len(self.serialize())
@@ -227,10 +238,10 @@ class router_identity:
         data += self.cert.serialize()
         return data
 
-class lease:
+class lease(object):
 
     _log = logging.getLogger('lease')
-    
+
     def __init__(self, ri_hash=None, tid=None):
         self.ri = ri_hash
         self.tid = tid
@@ -242,7 +253,7 @@ class lease:
         self.data += date()
         self._log.debug('lease is %d bytes' % len(self.data))
         assert len(self.data) == 44
-        
+
     def serialize(self):
         return self.data
 
@@ -251,7 +262,7 @@ class lease:
 
 
 
-class mapping:
+class mapping(object):
     """
     i2p dictionary object
     it sucks
@@ -284,13 +295,13 @@ class mapping:
             self._log.debug('len of mapping is %d bytes' % dlen)
             dlen = struct.pack('>H', dlen)
             self.data = dlen + data
-            
+
     def serialize(self):
         return self.data
 
     def __str__(self):
         return str(self.opts)
-                
+
 def date(num=None):
     if isinstance(num, bytes):
         num = struct.unpack('>Q', num)[0]
@@ -300,7 +311,7 @@ def date(num=None):
     return struct.pack('>Q', num)
 
 
-class datagram:
+class datagram(object):
 
     _log = logging.getLogger('datagram')
 
@@ -328,14 +339,14 @@ class datagram:
             payload_hash = sha256(self.payload)
             self.sig = self.dest.sign(payload_hash)
             self._log.debug('signature=%s' % self.sig)
-            self.data += self.sig + self.payload 
+            self.data += self.sig + self.payload
 
     def serialize(self):
         return self.data
 
     def __str__(self):
-        return '[Datagram payload=%s sig=%s]' % ( self.payload, self.sig) 
-        
+        return '[Datagram payload=%s sig=%s]' % ( self.payload, self.sig)
+
 
 class i2cp_protocol(Enum):
 
@@ -343,7 +354,7 @@ class i2cp_protocol(Enum):
     DGRAM = 17
     RAW = 18
 
-class i2cp_payload:
+class i2cp_payload(object):
 
     gz_header = b'\x1f\x8b\x08'
 
