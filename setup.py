@@ -23,11 +23,11 @@ setup(
         'Topic :: Internet',
     ],
     license='Public Domain',
-
-    setup_requires=['vcversioner>=1'],
-    vcversioner={
-        'version_module_paths': ['i2p/i2cp/_version.py'],
-    },
-    install_requires=install_requires,
+    version='0.0.0',
+    #setup_requires=['vcversioner>=1'],
+    #vcversioner={
+    #    'version_module_paths': ['i2p/i2cp/_version.py'],
+    #},
+    #install_requires=install_requires,
     packages=['i2p.i2cp'],
 )
