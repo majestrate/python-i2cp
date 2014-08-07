@@ -1,3 +1,11 @@
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
+from future.builtins import int
+from future import standard_library
+standard_library.install_hooks()
+from future.builtins import object
 
 import io
 import logging
@@ -35,11 +43,11 @@ class message_type(Enum):
 
 
 
-class Message:
+class Message(object):
     """
     i2cp message
     """
-    
+
     _log = logging.getLogger('I2CP-Message')
 
     @staticmethod
@@ -75,7 +83,11 @@ class Message:
         return hdr + self.body
 
     def __str__(self):
-        return '[I2CPMessage type=%s body=%s]' % (self.type.name, self.body)
+        try:
+            return '[I2CPMessage type=%s body=%s]' % (self.type.name, self.body)
+        except UnicodeDecodeError:
+            # TODO Fix for Python 2
+            return '[I2CPMessage type=%s]' % (self.type.name)
 
 class HostLookupMessage(Message):
     """
@@ -87,7 +99,7 @@ class HostLookupMessage(Message):
     def __init__(self, name=None, sid=None, rid=None, raw=None, req_timeout=5.0):
         if raw:
             raise NotImplemented()
-        else:    
+        else:
             self.name = name
             if isinstance(req_timeout, float):
                 req_timeout *= 1000
@@ -105,7 +117,7 @@ class HostLookupMessage(Message):
             body += struct.pack('>B', self.req_type)
             body += name
             Message.__init__(self, type=message_type.HostLookup, body=body)
-        
+
 
     def __str__(self):
         return '[HostLookupMessage reqid=%d sid=%d timeout=%dms name=%s reqtype=%d]' % (
@@ -130,7 +142,7 @@ class HostLookupReplyMessage(Message):
 
 
 class CreateSessionMessage(Message):
-    
+
     def __init__(self, opts=None, date=None, dest=None, raw=None):
         if raw:
             Message.__init__(self, raw)
@@ -154,7 +166,7 @@ class CreateSessionMessage(Message):
 class RequestLSMessage(Message):
 
     _log = logging.getLogger(__name__)
-    
+
     def __init__(self, raw):
         Message.__init__(self, raw=raw)
         raw = self.body
@@ -175,8 +187,8 @@ class RequestLSMessage(Message):
 
     def __str__(self):
         return '[RequestLS sid=%d date=%s leases=%s date=%s]' % (self.sid,
-                                                                 self.date, 
-                                                                 self.leases, 
+                                                                 self.date,
+                                                                 self.leases,
                                                                  self.date)
 
 class CreateLSMessage(Message):
@@ -194,13 +206,13 @@ class CreateLSMessage(Message):
             body += leaseset.serialize()
             Message.__init__(self, type=message_type.CreateLS, body=body)
             self.sid = sid
-            self.sigkey = sigkey 
+            self.sigkey = sigkey
             self.enckey = enckey
             self.ls = leaseset
-        
+
     def __str__(self):
         return '[CreateLS sid=%s leasesets=%s]' % (
-            self.sid, 
+            self.sid,
             self.ls)
 
 class DisconnectMessage(Message):
@@ -223,10 +235,10 @@ class session_status(Enum):
     UPDATED = 2
     INVALID = 3
     REFUSED = 4
-    
+
 
 class SessionStatusMessage(Message):
-    
+
     _log = logging.getLogger('SessionStatus')
 
     def __init__(self, raw):
@@ -298,8 +310,8 @@ class message_status(Enum):
     BAD_LS = 19
     EXPIRED_LS = 20
     NO_LS = 21
-    
-    
+
+
 
 class MessageStatusMessage(Message):
 

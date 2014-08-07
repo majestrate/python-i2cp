@@ -1,3 +1,10 @@
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_hooks()
+
 import logging
 import os
 import queue
@@ -64,7 +71,7 @@ class Connection:
         self._sock.connect(self._i2cp_addr)
         self._connected = True
         self._send_raw(PROTOCOL_VERSION)
-        
+
     def generate_dest(self, keyfile):
         if not os.path.exists(keyfile):
             if self.ed25519:
@@ -72,7 +79,7 @@ class Connection:
             else:
                 destination.generate_dsa(keyfile)
         self.dest = destination.load(keyfile)
-    
+
     def _recv_msg(self):
         sfd = self._sock.makefile('rb')
         self._log.debug('recv...')
@@ -174,7 +181,7 @@ class Connection:
     def _host_not_found(self, rid):
         if rid in self._pending_name_lookups:
             self._pending_name_lookups.pop(rid)(None)
-        
+
 
     def _async_lookup(self, name, hook):
         msg = HostLookupMessage(name=name, sid=self._sid)
@@ -217,7 +224,7 @@ class Connection:
             self._log.debug('payload=%s' % p)
             msg = SendMessageMessage(sid=self._sid, dest=_dest, payload=p.serialize())
             self._send_msg(msg)
-        
+
         if isinstance(dest, str):
             self._async_lookup(dest,runit)
         else:
@@ -230,7 +237,11 @@ class Connection:
         if self._sock is None:
             self._log.error('cannot send data, connection closed')
             return
-        self._log.debug('--> %s' % data)
+        try:
+            self._log.debug('--> %s' % data)
+        except UnicodeDecodeError:
+            # TODO Fix for Python 2
+            pass
         try:
             sent = self._sock.send(data)
             self._log.debug('sent %d bytes' % sent)
@@ -266,4 +277,4 @@ def lookup(name, i2cp_host='127.0.0.1', i2cp_port=7654):
         dest = msg.dest
     c.close()
     return dest
-        
+

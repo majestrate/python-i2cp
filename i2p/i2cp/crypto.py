@@ -1,3 +1,12 @@
+from __future__ import print_function
+from __future__ import unicode_literals
+from __future__ import division
+from __future__ import absolute_import
+from future.builtins import int
+from future.builtins import open
+from future import standard_library
+standard_library.install_hooks()
+
 from Crypto.Hash import SHA, SHA256
 from Crypto.PublicKey import ElGamal, DSA
 from Crypto.Random.random import StrongRandom as random
@@ -51,13 +60,13 @@ def gen_elgamal_key(fname=None,fd=None):
     doclose = fd is None
     if doclose:
         fd = open(fname, 'wb')
-        
+
     fd.write(key.y.to_bytes(256, 'big'))
     fd.write(key.x.to_bytes(256, 'big'))
-        
+
     if doclose:
         fd.close()
-    
+
 
 def elgamal_public_key_to_bytes(key):
     return key.y.to_bytes(256, 'big')
@@ -133,7 +142,7 @@ def gen_dsa_key(fname=None,fd=None):
     nofname = fd is None
     if nofname:
         fd = open(fname, 'wb')
-        
+
     y, x = dsakey.y , dsakey.x
     fd.write(y.to_bytes(128, 'big'))
     fd.write(x.to_bytes(128, 'big'))

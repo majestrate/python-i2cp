@@ -6,8 +6,8 @@ public domain
 
 requires:
 
-* python 3.4 or higher
-* i2p 0.9.14 or higher
+* Python 2.6, 2.7 or 3.x
+* I2P 0.9.14 or higher
 
 at the moment, no public api
 
@@ -15,4 +15,5 @@ to see it do stuff::
 
     git clone https://github.com/majestrate/python-i2cp
     cd python-i2cp
-    python3.4 -m i2p.i2cp
+    pip install -r requirements.txt
+    python -m i2p.i2cp

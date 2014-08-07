@@ -1,3 +1,10 @@
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_hooks()
+
 from argparse import ArgumentParser as AP
 import logging
 import time
@@ -44,7 +51,7 @@ def main():
     ap.add_argument('--dest', type=str)
 
     args = ap.parse_args()
-    
+
     loglvl = args.debug and logging.DEBUG or logging.INFO
     format='%(levelname)s [%(asctime)s] || %(message)s'
     logging.basicConfig(format=format, level=loglvl)
