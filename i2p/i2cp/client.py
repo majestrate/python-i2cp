@@ -51,6 +51,7 @@ class Connection:
         self._log = logging.getLogger('I2CP-Connection-%s-%d' % self._i2cp_addr)
         self._sid = None
         self.dest = None
+        self._sfd = None
         self._connected = False
         self._pending_name_lookups = {}
         self._sendq = queue.Queue()
@@ -60,8 +61,6 @@ class Connection:
         self.opts = dict(session_options)
         self.opts['i2cp.fastReceive'] = 'true'
         self._threads = list()
-        self._threads.append(Thread(target=self._run_recv,args=()))
-        self._threads.append(Thread(target=self._run_send,args=()))
 
     def is_open(self):
         return self._connected
@@ -69,6 +68,7 @@ class Connection:
     def open(self):
         self._log.debug('connecting...')
         self._sock.connect(self._i2cp_addr)
+        self._sfd = self._sock.makefile('rwb')
         self._connected = True
         self._send_raw(PROTOCOL_VERSION)
 
@@ -81,17 +81,10 @@ class Connection:
         self.dest = destination.load(keyfile)
 
     def _recv_msg(self):
-        sfd = self._sock.makefile('rb')
         self._log.debug('recv...')
-        msg, raw = Message.parse(sfd, parts=False)
-        sfd.close()
+        msg, raw = Message.parse(self._sfd, parts=False)
         self._log.debug('got message: %s' %msg)
         return msg, raw
-        
-    def join(self):
-        if self._process is not None:
-            self._process.join()
-        
         
     def start(self):
         if self.dest is None:
@@ -99,6 +92,8 @@ class Connection:
         self._log.info('out dest is %s' % self.dest.base32())
         msg = Message(message_type.GetDate)
         self._send_msg(msg)
+        self._threads.append(Thread(target=self._run_recv,args=()))
+        self._threads.append(Thread(target=self._run_send,args=()))
         for t in self._threads:
             t.start()
         
@@ -250,14 +245,17 @@ class Connection:
 
 
     def close(self):
-        if self._sock is None:
-            return
+        if self._sfd:
+            self._sfd.close()
+            self._sfd = None
         self._log.debug('closing connection...')
-        self._sock.close()
-        self._sock = None
-        self._connected = False
-        for t in self._threads:
-            t.join()
+        if self._sock:
+            self._sock.shutdown(socket.SHUT_RDWR)
+            self._sock.close()
+            self._sock = None
+            self._connected = False
+            for t in self._threads:
+                t.join(1.0)
 
 def lookup(name, i2cp_host='127.0.0.1', i2cp_port=7654):
     if not name.endswith('.i2p'):
@@ -265,7 +263,7 @@ def lookup(name, i2cp_host='127.0.0.1', i2cp_port=7654):
     c = Connection(I2CPHandler(), i2cp_host=i2cp_host, i2cp_port=i2cp_port)
     c.open()
     msg = HostLookupMessage(name=name, sid=c._sid)
-    c._send_msg(msg)
+    c._send_raw(msg.serialize())
     msg, raw = c._recv_msg()
     dest = None
     if msg.type == message_type.Disconnect:

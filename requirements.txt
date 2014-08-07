@@ -1,3 +1,5 @@
 pycrypto>=2.6.1
 future>=0.12.4
 enum34>=1.0
+pytest
+pynacl

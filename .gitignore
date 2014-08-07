@@ -3,3 +3,6 @@
 _version.py
 version.txt
 .tox
+build
+dist
+*.egg-info

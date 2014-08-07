@@ -6,10 +6,9 @@ public domain
 
 requires:
 
-* Python 2.6, 2.7 or 3.x
+* Python 3.4 or higher
 * I2P 0.9.14 or higher
-
-at the moment, no public api
+* libsodium
 
 to see it do stuff::
 
@@ -17,3 +16,5 @@ to see it do stuff::
     cd python-i2cp
     pip install -r requirements.txt
     python -m i2p.i2cp
+
+see examples directory for example usage
