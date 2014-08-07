@@ -50,10 +50,13 @@ class Message:
         raw = fd.read(5)
         _len, _type = struct.unpack('>IB', raw)
         _data = fd.read(_len)
-        if parts:
-            return message_type(_type), _data
-        return Message(type=message_type(_type), body=_data), raw + _data
-
+        try:
+            if parts:
+                return message_type(_type), _data
+            return Message(type=message_type(_type), body=_data), raw + _data
+        except Exception as e:
+            Message._log.error('bad message: %s' % e)
+            return None, None
 
     def __init__(self, type=None, body=None, fd=None, raw=None):
         if raw:
@@ -141,7 +144,7 @@ class CreateSessionMessage(Message):
             data += _dest
             data += opts
             data += date
-            data += dest.sign(data)
+            data += dest.dsa_sign(data)
             type = message_type.CreateSession
             Message.__init__(self, type, data)
 

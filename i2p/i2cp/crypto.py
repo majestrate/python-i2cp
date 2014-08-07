@@ -5,6 +5,7 @@ from .util import *
 import codecs
 import math
 import string
+import nacl.signing as nacl
 
 sha1 = lambda x: SHA.new(x).digest()
 sha256 = lambda x: SHA256.new(x).digest()
@@ -103,6 +104,8 @@ def DSA_SHA1_SIGN(key, data):
         k = random().randint(1, key.q - 1)
         R, S =  key.sign(sha1(data), k)
         return R.to_bytes(20,'big') + S.to_bytes(20,'big')
+    else:
+        raise Exception('No Private Key')
 
 def DSA_SHA1_VERIFY(key, data, sig):
     """
@@ -119,6 +122,11 @@ def dsa_private_key_to_bytes(key):
 
 def dsa_public_key_from_bytes(data):
     return DSAKey(int.from_bytes(data,'big'))
+
+def dsa_dump_key(key, fd):
+    fd.write(key.y.to_bytes(128,'big'))
+    fd.write(key.x.to_bytes(128,'big'))
+    
 
 def gen_dsa_key(fname=None,fd=None):
     dsakey = DSAGenerate()
@@ -143,14 +151,24 @@ def gen_keypair(fd):
 def dump_keypair(enckey, sigkey, fd):
     fd.write(enckey.y.to_bytes(256,'big'))
     fd.write(enckey.x.to_bytes(256,'big'))
-    fd.write(sigkey.y.to_bytes(128,'big'))
-    fd.write(sigkey.x.to_bytes(128,'big'))
-    
+    dsa_dump_key(sigkey, fd)
 
 def load_keypair(fd):
     enckey = ElGamalKey(fd=fd)
     sigkey = DSAKey(fd=fd)
     return enckey, sigkey
+
+
+def NaclPublicKey(data):
+    return nacl.VerifyKey(key=data)
+
+def NaclGenerate():
+    return nacl.SigningKey(nacl.random())
+
+def nacl_key_to_public_bytes(key):
+    if hasattr(key, 'verify_key'):
+        key = key.verify_key
+    return key.encode()
 
 if __name__ == '__main__':
     data = b'testdata'
