@@ -60,18 +60,18 @@ def gen_elgamal_key(fname=None,fd=None):
     if doclose:
         fd = open(fname, 'wb')
 
-    fd.write(key.y.to_bytes(256, 'big'))
-    fd.write(key.x.to_bytes(256, 'big'))
+    fd.write(int(key.y).to_bytes(256, 'big'))
+    fd.write(int(key.x).to_bytes(256, 'big'))
 
     if doclose:
         fd.close()
 
 
 def elgamal_public_key_to_bytes(key):
-    return key.y.to_bytes(256, 'big')
+    return int(key.y).to_bytes(256, 'big')
 
 def elgamal_private_key_to_bytes(key):
-    return key.x.to_bytes(256, 'big')
+    return int(key.x).to_bytes(256, 'big')
 
 def DSAKey(pub=None, priv=None, fd=None):
     """
@@ -111,7 +111,7 @@ def DSA_SHA1_SIGN(key, data):
     if key.has_private():
         k = random().randint(1, key.q - 1)
         R, S =  key.sign(sha1(data), k)
-        return R.to_bytes(20,'big') + S.to_bytes(20,'big')
+        return int(R).to_bytes(20,'big') + int(S).to_bytes(20,'big')
 
 def DSA_SHA1_VERIFY(key, data, sig):
     """
@@ -121,10 +121,10 @@ def DSA_SHA1_VERIFY(key, data, sig):
     assert key.verify(sha1(data), (R,S))
 
 def dsa_public_key_to_bytes(key):
-    return key.y.to_bytes(128, 'big')
+    return int(key.y).to_bytes(128, 'big')
 
 def dsa_private_key_to_bytes(key):
-    return key.x.to_bytes(20, 'big')
+    return int(key.x).to_bytes(20, 'big')
 
 def dsa_public_key_from_bytes(data):
     return DSAKey(int.from_bytes(data,'big'))
@@ -136,8 +136,8 @@ def gen_dsa_key(fname=None,fd=None):
         fd = open(fname, 'wb')
 
     y, x = dsakey.y , dsakey.x
-    fd.write(y.to_bytes(128, 'big'))
-    fd.write(x.to_bytes(128, 'big'))
+    fd.write(int(y).to_bytes(128, 'big'))
+    fd.write(int(x).to_bytes(128, 'big'))
     if nofname:
         fd.close()
 
@@ -150,10 +150,10 @@ def gen_keypair(fd):
     gen_dsa_key(fd)
 
 def dump_keypair(enckey, sigkey, fd):
-    fd.write(enckey.y.to_bytes(256,'big'))
-    fd.write(enckey.x.to_bytes(256,'big'))
-    fd.write(sigkey.y.to_bytes(128,'big'))
-    fd.write(sigkey.x.to_bytes(128,'big'))
+    fd.write(int(enckey.y).to_bytes(256,'big'))
+    fd.write(int(enckey.x).to_bytes(256,'big'))
+    fd.write(int(sigkey.y).to_bytes(128,'big'))
+    fd.write(int(sigkey.x).to_bytes(128,'big'))
 
 
 def load_keypair(fd):

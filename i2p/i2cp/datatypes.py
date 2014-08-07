@@ -107,7 +107,7 @@ class leaseset(object):
         data += self.dest.serialize()
         data += elgamal_public_key_to_bytes(self.enckey)
         data += dsa_public_key_to_bytes(self.sigkey)
-        data += len(self.leases).to_bytes(1,'big')
+        data += int(len(self.leases)).to_bytes(1,'big')
         for l in self.leases:
             data += l.serialize()
         sig = self.dest.sign(data)
