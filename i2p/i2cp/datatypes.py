@@ -15,8 +15,6 @@ from enum import Enum
 import logging
 import struct
 import time
-import zlib
-
 
 
 class certificate_type(Enum):
@@ -26,26 +24,25 @@ class certificate_type(Enum):
     SIGNED = 3
     MULTI = 4
     KEY = 5
+    ED25519 = 15
 
 class certificate(object):
 
     _log = logging.getLogger('certificate')
 
-    def __init__(self, dlen=0, type=certificate_type.NULL, data=bytearray(), b64=True, raw=None):
-        if raw:
-            raise NotImplemented()
-        else:
-            if isinstance(type, int) or isinstance(type, certificate_type):
-                type = certificate_type(type)
-            if isinstance(type, str):
-                type = type.encode('ascii')
-            if isinstance(type, bytes):
-                type = certificate_type(type)
-            if b64:
-                data = i2p_b64decode(data)
-            self.data = data
-            self.type = type
-        self._log.debug('type=%s data=%s' % (type.name, i2p_b64encode(data)))
+    def __init__(self, type=certificate_type.NULL, data=bytearray(), b64=True):
+        
+        if isinstance(type, int) or isinstance(type, certificate_type):
+            type = certificate_type(type)
+        if isinstance(type, str):
+            type = type.encode('ascii')
+        if isinstance(type, bytes):
+            type = certificate_type(type)
+        if b64:
+            data = i2p_b64decode(data)
+        self.data = data
+        self.type = type
+        self._log.debug('type=%s data=%s raw=%s' % (type.name, i2p_b64encode(data), self.serialize()))
 
 
     def __str__(self):
@@ -53,8 +50,8 @@ class certificate(object):
 
     def serialize(self, b64=False):
         data = bytearray()
-        data += struct.pack('>H', len(self.data))
         data += struct.pack('>B', self.type.value)
+        data += struct.pack('>H', len(self.data))
         data += self.data
         if b64:
             data = i2p_b64_encode(data)
@@ -84,7 +81,7 @@ class leaseset(object):
                 numls -= 1
                 self.leases.append(l)
             self.sig = raw[:-40]
-            self.dest.sigkey.verify(raw[-40:], self.sig)
+            self.dest.dsa_verify(raw[-40:], self.sig)
         else:
             self.dest = dest
             self.enckey = ls_enckey
@@ -110,8 +107,8 @@ class leaseset(object):
         data += int(len(self.leases)).to_bytes(1,'big')
         for l in self.leases:
             data += l.serialize()
-        sig = self.dest.sign(data)
-        self.dest.verify(data, sig)
+        sig = self.dest.dsa_sign(data)
+        self.dest.dsa_verify(data, sig)
         return data + sig
 
 class destination(object):
@@ -125,67 +122,100 @@ class destination(object):
             data = i2p_b64decode(data)
         ctype = certificate_type(data[384])
         clen = struct.unpack('>H', data[385:387])[0]
-        cert = certificate(clen ,ctype, data[387:387+clen])
-        enckey = data[:256]
-        sigkey = data[256:384]
+        cert = certificate(ctype, data[387:387+clen])
         if cert.type == certificate_type.NULL:
-            return ElGamalPublicKey(enckey), DSAPublicKey(sigkey), cert
-
+            return ElGamalPublicKey(data[:256]), DSAPublicKey(data[256:384]), cert, None
+        elif cert.type == certificate_type.ED25519:
+            return None, DSAPublicKey(data[256:384]), cert, NaclPublicKey(data[:32])
 
     @staticmethod
-    def generate(fname):
+    def generate_dsa(fname):
         enckey , sigkey = ElGamalGenerate(), DSAGenerate()
         with open(fname, 'wb') as wf:
+            wf.write(certificate_type.NULL.value.to_bytes(1, 'big'))
             dump_keypair(enckey, sigkey, wf)
 
     @staticmethod
+    def generate_ed25519(fname): 
+        edkey = NaclGenerate()
+        sigkey = DSAGenerate()
+        with open(fname, 'wb') as wf:
+            wf.write(certificate_type.ED25519.value.to_bytes(1, 'big'))
+            wf.write(edkey.encode())
+            dsa_dump_key(sigkey, wf)
+
+    @staticmethod
     def load(fname):
+        enckey, sigkey, cert, edkey = None, None, None, None
         with open(fname, 'rb') as rf:
-            enckey, sigkey = load_keypair(rf)
-            data = rf.read()
-            cert = certificate()
+            keytype = certificate_type(int.from_bytes(rf.read(1),'big'))
+            if keytype == certificate_type.NULL:
+                enckey, sigkey = load_keypair(rf)
+                data = rf.read()
+                cert = certificate()
+            elif keytype == certificate_type.ED25519:
+                edkey = nacl.SigningKey(rf.read(32))
+                sigkey = DSAKey(fd=rf)
+                cert = certificate(type=keytype)
+        if edkey:
+            return destination(enckey, sigkey, cert, edkey=edkey)
         return destination(enckey, sigkey, cert)
 
     def __str__(self):
-        return '[Destination %s %s enckey=%s sigkey=%s cert=%s]' % (
+        return '[Destination %s %s cert=%s]' % (
             self.base32(), self.base64(),
-            elgamal_public_key_to_bytes(self.enckey),
-            dsa_public_key_to_bytes(self.sigkey),
             self.cert)
 
-    def __init__(self, enckey=None, sigkey=None, cert=None, raw=None, b64=False):
+    def __init__(self, enckey=None, sigkey=None, cert=None, raw=None, b64=False, edkey=None):
         if raw:
-            enckey, sigkey, cert = self.parse(raw, b64)
-        self.enckey = enckey
-        self.sigkey = sigkey
-        self.cert = cert
+            enckey, sigkey, cert, edkey = self.parse(raw, b64)
+        self.enckey = enckey 
+        self.sigkey = sigkey 
+        self.cert = cert 
+        self.edkey = edkey
 
     def sign(self, data):
-        sig = DSA_SHA1_SIGN(self.sigkey, data)
-        self._log.debug('sign data=%s sig=%s' % (data, sig))
+        sig = None
+        if self.cert.type == certificate_type.NULL:
+            sig = DSA_SHA1_SIGN(self.sigkey, data)
+        elif self.cert.type == certificate_type.ED25519:
+            sig = self.edkey.sign(data)
         return sig
 
-    def verify(self, data, sig):
-        self._log.debug('verify data=%s sig=%s' % (data, sig))
+    def dsa_verify(self, data, sig):
         DSA_SHA1_VERIFY(self.sigkey, data, sig)
+
+    def verify(self, data, sig):
+        if self.cert.type == certificate_type.NULL:
+            self.dsa_verify(data, sig)
+        elif self.cert.type == certificate_type.ED25519:
+            return self.sigkey.verify_key.verify(data)
 
     def __len__(self):
         return len(self.serialize())
 
     def base32(self):
-        data = bytearray()
-        data += elgamal_public_key_to_bytes(self.enckey)
-        data += dsa_public_key_to_bytes(self.sigkey)
-        data += self.cert.serialize()
+        data = self.serialize()
         return i2p_b32encode(sha256(data)).decode('ascii')
 
-    def sign(self, data):
+    def dsa_sign(self, data):
         return DSA_SHA1_SIGN(self.sigkey, data)
 
+    def sign(self, data):
+        if self.cert.type == certificate_type.NULL:
+            return self.dsa_sign(data)
+        elif self.cert.type == certificate_type.ED25519:
+            return self.edkey.sign(bytes(data))
+        
     def serialize(self):
         data = bytearray()
         if self.cert.type == certificate_type.NULL:
             data += elgamal_public_key_to_bytes(self.enckey)
+            data += dsa_public_key_to_bytes(self.sigkey)
+            data += self.cert.serialize()        
+        elif self.cert.type == certificate_type.ED25519:
+            data += nacl_key_to_public_bytes(self.edkey)
+            data += b'\x00' * ( 256 - 32 )
             data += dsa_public_key_to_bytes(self.sigkey)
             data += self.cert.serialize()
         self._log.debug('serialize len=%d' % len(data))
@@ -210,35 +240,7 @@ class i2p_string(object):
         dlen = len(data)
         return struct.pack('>B', dlen) + data
 
-class router_identity(object):
-
-    def __init__(self, raw=None, enckey=None, sigkey=None, cert=None):
-        if raw:
-            self.enckey = ElGamalPublicKey(raw[256:])
-            self.sigkey = DSAPublicKey(raw[256:384])
-            self.cert = certificate(raw[384:])
-        else:
-            self.enckey = enckey
-            self.sigkey = sigkey
-            self.cert = cert
-
-    def __len__(self):
-        return len(self.serialize())
-
-    def __str__(self):
-        return '[RouterIdentity enckey=%s sigkey=%s cert=%s]' % (
-            elgamal_public_key_to_bytes(self.enckey),
-            dsa_public_key_to_bytes(self.sigkey),
-            self.cert)
-
-    def serialize(self):
-        data = bytearray()
-        data += elgamal_public_key_to_bytes(self.enckey)
-        data += dsa_public_key_to_bytes(self.sigkey)
-        data += self.cert.serialize()
-        return data
-
-class lease(object):
+class lease:
 
     _log = logging.getLogger('lease')
 
@@ -310,10 +312,18 @@ def date(num=None):
     num = int(num)
     return struct.pack('>Q', num)
 
+class i2cp_protocol(Enum):
 
-class datagram(object):
+    STREAMING = 6
+    DGRAM = 17
+    RAW = 18
+    DGRAM_ED25519 = 23
 
-    _log = logging.getLogger('datagram')
+
+class dsa_datagram:
+
+    protocol = i2cp_protocol.DGRAM
+    _log = logging.getLogger('datagram-dsa')
 
     def __init__(self, dest=None, raw=None, payload=None):
         if raw:
@@ -345,14 +355,52 @@ class datagram(object):
         return self.data
 
     def __str__(self):
-        return '[Datagram payload=%s sig=%s]' % ( self.payload, self.sig)
+        return '[DSADatagram payload=%s sig=%s]' % ( self.payload, self.sig) 
 
 
-class i2cp_protocol(Enum):
+class ed25519_datagram:
 
-    STREAMING = 6
-    DGRAM = 17
-    RAW = 18
+    protocol = i2cp_protocol.DGRAM_ED25519
+    _log = logging.getLogger('datagram-25519')
+    max_age  = 30 * 1000
+
+
+    def __init__(self, dest=None, raw=None, payload=None):
+        if raw:
+            self._log.debug('rawlen=%d' % len(raw))
+            self.data = raw
+            self._log.debug('load dgram data: %s' % raw)
+            self.dest = destination(raw=raw)
+            self._log.debug('destlen=%s' % self.dest)
+            raw = raw[len(self.dest):]
+            if self.dest.cert.type == certificate_type.ED25519:
+                payload = self.dest.edkey.verify(raw)
+                now = int(time.time() * 1000)
+                dlt = now - struct.unpack('>Q',payload[:8])[0]
+                if abs(dlt) < self.max_age:
+                    self.payload = payload[8:]
+                else:
+                    self._log.error('datagram sage is %d ms, dropping' % dlt)
+                    self.payload = bytearray()
+            else:
+                raise I2CPException('invalid cert: type=%s' % dest.cert.type)
+        elif dest.cert.type == certificate_type.ED25519:
+            self.dest = dest
+            self.payload = date()
+            self.payload += payload
+            self.data = bytearray()
+            self.data += self.dest.serialize()
+            self.data += self.dest.sign(self.payload)
+        else:
+            raise I2CPException('cannot construct ed25519 datagram with param: %s %s %s' %(dest, raw, payload))
+            
+
+    def serialize(self):
+        return self.data
+
+    def __str__(self):
+        return '[DSADatagram payload=%s sig=%s]' % ( self.payload, self.sig) 
+    
 
 class i2cp_payload(object):
 
