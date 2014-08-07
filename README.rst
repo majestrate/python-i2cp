@@ -6,7 +6,7 @@ public domain
 
 requires:
 
-* Python 3.4 or higher
+* Python 2.6, 2.7 or 3.x
 * I2P 0.9.14 or higher
 * libsodium
 
