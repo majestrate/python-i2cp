@@ -320,7 +320,14 @@ class i2cp_protocol(Enum):
     DGRAM_ED25519 = 23
 
 
-class dsa_datagram:
+class datagram:
+
+    def __eq__(self, obj):
+        if hasattr(self, 'payload') and hasattr(obj, 'payload'):
+            return self.payload == obj.payload
+        return False
+
+class dsa_datagram(datagram):
 
     protocol = i2cp_protocol.DGRAM
     _log = logging.getLogger('datagram-dsa')
@@ -358,7 +365,7 @@ class dsa_datagram:
         return '[DSADatagram payload=%s sig=%s]' % ( self.payload, self.sig) 
 
 
-class ed25519_datagram:
+class ed25519_datagram(datagram):
 
     protocol = i2cp_protocol.DGRAM_ED25519
     _log = logging.getLogger('datagram-25519')
@@ -423,14 +430,17 @@ class i2cp_payload(object):
             self.data = i2p_decompress(data[10:])
             self._log.debug('decompressed=%s' % self.data)
         else:
-            self._log.debug('payload data len=%d' %len(data))
-            self.data = i2p_compress(data)
-            self._log.debug('compressed payload len=%d' % len(self.data))
-            self.srcport = srcport
-            self.dstport = dstport
-            self.proto = i2cp_protocol(proto)
-            self.flags = 0
-            self.xflags = 2
+            if check_portnum(srcport) and check_portnum(dstport):
+                self._log.debug('payload data len=%d' %len(data))
+                self.data = i2p_compress(data)
+                self._log.debug('compressed payload len=%d' % len(self.data))
+                self.srcport = srcport
+                self.dstport = dstport
+                self.proto = i2cp_protocol(proto)
+                self.flags = 0
+                self.xflags = 2
+            else:
+                raise ValueError('invalid ports: srcport=%s dstport=%s' % (srcport, dstport))
 
     def serialize(self):
         data = bytearray()
