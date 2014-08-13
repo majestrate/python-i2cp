@@ -1,5 +1,5 @@
 pycrypto>=2.6.1
-future>=0.12.5
+future>=0.13.0
 enum34>=1.0
 pytest
 pynacl
