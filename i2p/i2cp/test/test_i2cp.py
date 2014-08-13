@@ -1,3 +1,10 @@
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_hooks()
+
 from i2p.i2cp import client
 from unittest import TestCase
 
@@ -6,12 +13,12 @@ class DummyHandler(client.I2CPHandler):
     pass
 
 class TestI2CP(TestCase):
-    
+
 
     def setUp(self):
         self.dgram_data = 'test 12345'
         self.handler = DummyHandler()
-        
+
 
     def test_connect(self):
         c = client.Connection(self.handler)
@@ -27,4 +34,4 @@ class TestI2CP(TestCase):
         assert dest.base32() == 'mpvr7qmek2yz2ekegp5rur573z7e77vp3xqt2lfbco5i6nkfppcq.b32.i2p'
 
 
-    
+
