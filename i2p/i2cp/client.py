@@ -45,7 +45,7 @@ class I2CPHandler:
 
 class Connection:
 
-    def __init__(self, handler, session_options={},ed25519=True, keyfile='i2cp.key', i2cp_host='127.0.0.1', i2cp_port=7654):
+    def __init__(self, handler, session_options={},keyfile='i2cp.key', i2cp_host='127.0.0.1', i2cp_port=7654, ed25519=True):
         self._i2cp_addr = (i2cp_host, i2cp_port)
         self._sock = socket.socket()
         self._log = logging.getLogger('I2CP-Connection-%s-%d' % self._i2cp_addr)
@@ -57,9 +57,10 @@ class Connection:
         self._sendq = queue.Queue()
         self.handler = handler
         self.keyfile = keyfile
-        self.ed25519 = ed25519
         self.opts = dict(session_options)
         self.opts['i2cp.fastReceive'] = 'true'
+        self.send_dgram = self.send_ed25519_dgram
+        self.ed25519 = ed25519
         self._threads = list()
 
     def is_open(self):
@@ -255,24 +256,25 @@ class Connection:
             self._sock = None
             self._connected = False
             for t in self._threads:
-                t.join(1.0)
+                t.join()
 
 def lookup(name, i2cp_host='127.0.0.1', i2cp_port=7654):
     if not name.endswith('.i2p'):
         return destination(name, b64=True)
     c = Connection(I2CPHandler(), i2cp_host=i2cp_host, i2cp_port=i2cp_port)
-    c.open()
-    msg = HostLookupMessage(name=name, sid=c._sid)
-    c._send_raw(msg.serialize())
-    msg, raw = c._recv_msg()
     dest = None
-    if msg.type == message_type.Disconnect:
-        msg = DisconnectMessage(raw=raw)
-        raise I2CPException(msg.reason)
-    elif msg.type == message_type.HostLookupReply:
-        msg = HostLookupReplyMessage(raw=raw)
-        c._log.debug(msg)
-        dest = msg.dest
-    c.close()
+    try:
+        c.open()
+        msg = HostLookupMessage(name=name, sid=c._sid)
+        c._send_raw(msg.serialize())
+        msg, raw = c._recv_msg()
+        if msg.type == message_type.HostLookupReply:
+            msg = HostLookupReplyMessage(raw=raw)
+            c._log.debug(msg)
+            dest = msg.dest
+    except KeyboardInterrupt:
+        pass
+    finally:
+        c.close()
     return dest
 
