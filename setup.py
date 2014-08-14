@@ -1,7 +1,7 @@
 from setuptools import setup
 
 
-#with open('README.rst', 'rb') as infile:
+#with open('README.rst', 'r') as infile:
 #    long_description = infile.read()
 
 #with open('requirements.txt', 'r') as infile:
@@ -19,6 +19,11 @@ setup(
         'Intended Audience :: Developers',
         'License :: Public Domain',
         'Operating System :: OS Independent',
+        'Programming Language :: Python',
+        'Programming Language :: Python :: 2.6',
+        'Programming Language :: Python :: 2.7',
+        'Programming Language :: Python :: 3',
+        'Programming Language :: Python :: 3.3',
         'Programming Language :: Python :: 3.4',
         'Topic :: Internet',
     ],

@@ -2,6 +2,8 @@ from __future__ import unicode_literals
 from __future__ import print_function
 from __future__ import division
 from __future__ import absolute_import
+from future.builtins import dict
+from future.builtins import object
 from future import standard_library
 standard_library.install_hooks()
 
@@ -15,7 +17,7 @@ from .messages import *
 from .datatypes import *
 from .util import *
 
-class I2CPHandler:
+class I2CPHandler(object):
 
     def got_dgram(self,dest, data, srcport, dstport):
         """
@@ -43,7 +45,7 @@ class I2CPHandler:
         session is done executing
         """
 
-class Connection:
+class Connection(object):
 
     def __init__(self, handler, session_options={},keyfile='i2cp.key', i2cp_host='127.0.0.1', i2cp_port=7654, ed25519=True):
         self._i2cp_addr = (i2cp_host, i2cp_port)
