@@ -2,6 +2,7 @@ from __future__ import unicode_literals
 from __future__ import print_function
 from __future__ import division
 from __future__ import absolute_import
+from future.builtins import bytes
 from future.builtins import int
 from future.builtins import open
 from future.builtins import str
@@ -104,7 +105,7 @@ class leaseset(object):
         data += self.dest.serialize()
         data += elgamal_public_key_to_bytes(self.enckey)
         data += dsa_public_key_to_bytes(self.sigkey)
-        data += len(self.leases).to_bytes(1,'big')
+        data += int(len(self.leases)).to_bytes(1,'big')
         for l in self.leases:
             data += l.serialize()
         sig = self.dest.dsa_sign(data)
@@ -240,7 +241,7 @@ class i2p_string(object):
         dlen = len(data)
         return struct.pack('>B', dlen) + data
 
-class lease:
+class lease(object):
 
     _log = logging.getLogger('lease')
 
@@ -320,7 +321,7 @@ class i2cp_protocol(Enum):
     DGRAM_ED25519 = 23
 
 
-class dsa_datagram:
+class dsa_datagram(object):
 
     protocol = i2cp_protocol.DGRAM
     _log = logging.getLogger('datagram-dsa')
@@ -358,7 +359,7 @@ class dsa_datagram:
         return '[DSADatagram payload=%s sig=%s]' % ( self.payload, self.sig) 
 
 
-class ed25519_datagram:
+class ed25519_datagram(object):
 
     protocol = i2cp_protocol.DGRAM_ED25519
     _log = logging.getLogger('datagram-25519')
