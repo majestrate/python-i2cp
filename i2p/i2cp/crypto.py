@@ -12,6 +12,7 @@ from Crypto.Hash import SHA, SHA256
 from Crypto.PublicKey import ElGamal, DSA
 from Crypto.Random.random import StrongRandom as random
 from .util import *
+from .exceptions import I2CPException
 import codecs
 import math
 import string
@@ -122,7 +123,8 @@ def DSA_SHA1_VERIFY(key, data, sig):
     verify DSA-SHA1 signature
     """
     R, S = int.from_bytes(sig[:20],'big'), int.from_bytes(sig[20:],'big')
-    assert key.verify(sha1(data), (R,S))
+    if not key.verify(sha1(data), (R,S)):
+        raise I2CPException('DSA_SHA1_VERIFY Failed')
 
 def dsa_public_key_to_bytes(key):
     return int(key.y).to_bytes(128, 'big')

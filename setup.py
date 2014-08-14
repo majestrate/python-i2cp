@@ -1,16 +1,16 @@
 from setuptools import setup
 
 
-with open('README.rst', 'r') as infile:
-    long_description = infile.read()
+#with open('README.rst', 'r') as infile:
+#    long_description = infile.read()
 
-with open('requirements.txt', 'r') as infile:
-    install_requires = infile.read().split()
+#with open('requirements.txt', 'r') as infile:
+#    install_requires = infile.read().split()
 
 setup(
     name='i2p.i2cp',
     description='I2CP client library for I2P',
-    long_description=long_description,
+    #long_description=long_description,
     author='Jeff',
     author_email='ampernand@gmail.com',
     url='https://github.com/majestrate/python-i2cp',
