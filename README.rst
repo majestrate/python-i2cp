@@ -17,3 +17,10 @@ to see it do stuff::
     python -m i2p.i2cp
 
 see examples directory for example usage
+
+TODO:
+
+* clear out i2p.i2cp
+* i2p.socket -- i2p tcp/udp
+* i2p.inet -- ip over i2p
+* i2p.control -- i2p jsonrpc
