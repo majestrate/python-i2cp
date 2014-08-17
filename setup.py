@@ -34,5 +34,5 @@ setup(
     #    'version_module_paths': ['i2p/i2cp/_version.py'],
     #},
     #install_requires=install_requires,
-    packages=['i2p.i2cp', 'i2p.i2cp.test', 'i2p'],
+    packages=['i2p.i2cp', 'i2p.i2cp.test'],
 )
