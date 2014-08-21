@@ -1,11 +1,21 @@
 from setuptools import setup
+import os
 
 
-with open('README.rst', 'r') as infile:
-    long_description = infile.read()
+long_description = ''
+long_description_fname = 'README.rst'
 
-with open('requirements.txt', 'r') as infile:
-    install_requires = infile.read().split()
+if os.path.exists(long_description_fname):
+    with open(long_description_fname, 'r') as infile:
+        long_description = infile.read()
+
+
+install_requires = []
+install_requires_fname = 'requirements.txt'
+
+if os.path.exists(install_requires_fname):
+    with open(install_requires_fname, 'r') as infile:
+        install_requires = infile.read().split()
 
 setup(
     name='i2p.i2cp',

@@ -25,7 +25,7 @@ class certificate_type(Enum):
     SIGNED = 3
     MULTI = 4
     KEY = 5
-    ED25519 = 15
+    CURVE25519 = 15
 
 class certificate(object):
 
@@ -55,7 +55,7 @@ class certificate(object):
         data += struct.pack('>H', len(self.data))
         data += self.data
         if b64:
-            data = i2p_b64_encode(data)
+            data = i2p_b64encode(data)
         return data
 
 class leaseset(object):
@@ -126,7 +126,7 @@ class destination(object):
         cert = certificate(ctype, data[387:387+clen])
         if cert.type == certificate_type.NULL:
             return ElGamalPublicKey(data[:256]), DSAPublicKey(data[256:384]), cert, None
-        elif cert.type == certificate_type.ED25519:
+        elif cert.type == certificate_type.CURVE25519:
             return None, DSAPublicKey(data[256:384]), cert, NaclPublicKey(data[:32])
 
     @staticmethod
@@ -137,11 +137,11 @@ class destination(object):
             dump_keypair(enckey, sigkey, wf)
 
     @staticmethod
-    def generate_ed25519(fname): 
+    def generate_curve25519(fname):
         edkey = NaclGenerate()
         sigkey = DSAGenerate()
         with open(fname, 'wb') as wf:
-            wf.write(certificate_type.ED25519.value.to_bytes(1, 'big'))
+            wf.write(certificate_type.CURVE25519.value.to_bytes(1, 'big'))
             wf.write(edkey.encode())
             dsa_dump_key(sigkey, wf)
 
@@ -154,7 +154,7 @@ class destination(object):
                 enckey, sigkey = load_keypair(rf)
                 data = rf.read()
                 cert = certificate()
-            elif keytype == certificate_type.ED25519:
+            elif keytype == certificate_type.CURVE25519:
                 edkey = nacl.SigningKey(rf.read(32))
                 sigkey = DSAKey(fd=rf)
                 cert = certificate(type=keytype)
@@ -179,7 +179,7 @@ class destination(object):
         sig = None
         if self.cert.type == certificate_type.NULL:
             sig = DSA_SHA1_SIGN(self.sigkey, data)
-        elif self.cert.type == certificate_type.ED25519:
+        elif self.cert.type == certificate_type.CURVE25519:
             sig = self.edkey.sign(data)
         return sig
 
@@ -189,7 +189,7 @@ class destination(object):
     def verify(self, data, sig):
         if self.cert.type == certificate_type.NULL:
             self.dsa_verify(data, sig)
-        elif self.cert.type == certificate_type.ED25519:
+        elif self.cert.type == certificate_type.CURVE25519:
             return self.sigkey.verify_key.verify(data)
 
     def __len__(self):
@@ -205,7 +205,7 @@ class destination(object):
     def sign(self, data):
         if self.cert.type == certificate_type.NULL:
             return self.dsa_sign(data)
-        elif self.cert.type == certificate_type.ED25519:
+        elif self.cert.type == certificate_type.CURVE25519:
             return self.edkey.sign(bytes(data))
         
     def serialize(self):
@@ -214,7 +214,7 @@ class destination(object):
             data += elgamal_public_key_to_bytes(self.enckey)
             data += dsa_public_key_to_bytes(self.sigkey)
             data += self.cert.serialize()        
-        elif self.cert.type == certificate_type.ED25519:
+        elif self.cert.type == certificate_type.CURVE25519:
             data += nacl_key_to_public_bytes(self.edkey)
             data += b'\x00' * ( 256 - 32 )
             data += dsa_public_key_to_bytes(self.sigkey)
@@ -318,7 +318,7 @@ class i2cp_protocol(Enum):
     STREAMING = 6
     DGRAM = 17
     RAW = 18
-    DGRAM_ED25519 = 23
+    DGRAM_CURVE25519 = 23
 
 class datagram(object):
 
@@ -326,6 +326,21 @@ class datagram(object):
         if hasattr(self, 'payload') and hasattr(obj, 'payload'):
             return self.payload == obj.payload
         return False
+
+class raw_datagram(object):
+
+    protocol = i2cp_protocol.RAW
+
+    def __init__(self, dest=None, raw=None, payload=None):
+        if raw:
+            self.data = raw
+        else:
+            self.data = payload
+
+        self.dest = None
+
+    def serialize(self):
+        return self.data
 
 class dsa_datagram(datagram):
 
@@ -365,10 +380,10 @@ class dsa_datagram(datagram):
         return '[DSADatagram payload=%s sig=%s]' % ( self.payload, self.sig) 
 
 
-class ed25519_datagram(datagram):
+class curve25519_datagram(datagram):
 
-    protocol = i2cp_protocol.DGRAM_ED25519
-    _log = logging.getLogger('datagram-25519')
+    protocol = i2cp_protocol.DGRAM_CURVE25519
+    _log = logging.getLogger('datagram-curve25519')
     max_age  = 30 * 1000
 
 
@@ -380,7 +395,7 @@ class ed25519_datagram(datagram):
             self.dest = destination(raw=raw)
             self._log.debug('destlen=%s' % self.dest)
             raw = raw[len(self.dest):]
-            if self.dest.cert.type == certificate_type.ED25519:
+            if self.dest.cert.type == certificate_type.CURVE25519:
                 payload = self.dest.edkey.verify(raw)
                 now = int(time.time() * 1000)
                 dlt = now - struct.unpack('>Q',payload[:8])[0]
@@ -391,7 +406,7 @@ class ed25519_datagram(datagram):
                     self.payload = bytearray()
             else:
                 raise I2CPException('invalid cert: type=%s' % dest.cert.type)
-        elif dest.cert.type == certificate_type.ED25519:
+        elif dest.cert.type == certificate_type.CURVE25519:
             self.dest = dest
             self.payload = date()
             self.payload += payload
@@ -399,14 +414,14 @@ class ed25519_datagram(datagram):
             self.data += self.dest.serialize()
             self.data += self.dest.sign(self.payload)
         else:
-            raise I2CPException('cannot construct ed25519 datagram with param: %s %s %s' %(dest, raw, payload))
+            raise I2CPException('cannot construct curve25519 datagram with param: %s %s %s' %(dest, raw, payload))
             
 
     def serialize(self):
         return self.data
 
     def __str__(self):
-        return '[DSADatagram payload=%s sig=%s]' % ( self.payload, self.sig) 
+        return '[Curve25519 Datagram payload=%s sig=%s]' % ( self.payload, self.sig)
     
 
 class i2cp_payload(object):
