@@ -3,3 +3,4 @@ future>=0.13.0
 enum34>=1.0
 pytest
 pynacl
+tox

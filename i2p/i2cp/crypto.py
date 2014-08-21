@@ -161,8 +161,8 @@ def gen_keypair(fd):
     gen_dsa_key(fd)
 
 def dump_keypair(enckey, sigkey, fd):
-    fd.write(int(enckey.y).to_bytes(256,'big'))
-    fd.write(int(enckey.x).to_bytes(256,'big'))
+    fd.write(int(enckey.y).to_bytes(256, 'big'))
+    fd.write(int(enckey.x).to_bytes(256, 'big'))
     dsa_dump_key(sigkey, fd)
 
 def load_keypair(fd):

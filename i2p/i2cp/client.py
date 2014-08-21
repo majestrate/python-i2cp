@@ -19,7 +19,7 @@ from .util import *
 
 class I2CPHandler(object):
 
-    def got_dgram(self,dest, data, srcport, dstport):
+    def got_dgram(self, dest, data, srcport, dstport):
         """
         called every time we get a valid datagram
         """
@@ -47,7 +47,7 @@ class I2CPHandler(object):
 
 class Connection(object):
 
-    def __init__(self, handler, session_options={},keyfile='i2cp.key', i2cp_host='127.0.0.1', i2cp_port=7654, ed25519=True):
+    def __init__(self, handler, session_options={}, keyfile='i2cp.key', i2cp_host='127.0.0.1', i2cp_port=7654, curve25519=True):
         self._i2cp_addr = (i2cp_host, i2cp_port)
         self._sock = socket.socket()
         self._log = logging.getLogger('I2CP-Connection-%s-%d' % self._i2cp_addr)
@@ -61,8 +61,8 @@ class Connection(object):
         self.keyfile = keyfile
         self.opts = dict(session_options)
         self.opts['i2cp.fastReceive'] = 'true'
-        self.send_dgram = self.send_ed25519_dgram
-        self.ed25519 = ed25519
+        self.send_dgram = self.send_curve25519_dgram
+        self.curve25519 = curve25519
         self._threads = list()
 
     def is_open(self):
@@ -77,7 +77,7 @@ class Connection(object):
 
     def generate_dest(self, keyfile):
         if not os.path.exists(keyfile):
-            if self.ed25519:
+            if self.curve25519:
                 destination.generate_ed25519(keyfile)
             else:
                 destination.generate_dsa(keyfile)
@@ -191,19 +191,19 @@ class Connection(object):
             self._log.debug('dgram payload=%s' % payload.data)
             dgram = dsa_datagram(raw=payload.data)
             self.handler.got_dgram(dgram.dest, dgram.payload, payload.srcport, payload.dstport)
-        elif payload.proto == i2cp_protocol.DGRAM_ED25519:
+        elif payload.proto == i2cp_protocol.DGRAM_CURVE25519:
             self._log.debug('dgram-ED25519 payload=%s' % payload.data)
-            dgram = ed25519_datagram(raw=payload.data)
+            dgram = curve25519_datagram(raw=payload.data)
             self.handler.got_dgram(dgram.dest, dgram.payload, payload.srcport, payload.dstport)
         elif payload.proto == i2cp_protocol.RAW:
             self._log.debug('dgram-raw paylod=%s' % payload.data)
             self.handler.got_dgram(None, payload.data, payload.srcport, payload.dstport)
 
     def send_raw_dgram(self, dest, data, srcport=0, dstport=0):
-        self._send_dgram(raw_dgram, dest, data, srcport, dstport)
+        self._send_dgram(raw_datagram, dest, data, srcport, dstport)
 
-    def send_ed25519_dgram(self, dest, data, srcport=0, dstport=0):
-        self._send_dgram(ed25519_datagram, dest, data, srcport, dstport)
+    def send_curve25519_dgram(self, dest, data, srcport=0, dstport=0):
+        self._send_dgram(curve25519_datagram, dest, data, srcport, dstport)
         
     def send_dsa_dgram(self, dest, data, srcport=0, dstport=0):
         self._send_dgram(dsa_datagram, dest, data, srcport, dstport)
