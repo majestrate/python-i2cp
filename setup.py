@@ -44,7 +44,7 @@ setup(
     ],
     license='Public Domain',
     version=version,
-    setup_requires=(version or [] and ['vcversioner>=1']),
+    setup_requires=(not version and ['vcversioner>=1'] or []),
     vcversioner=(not version and {
         'version_module_paths': ['i2p/i2cp/_version.py'],
         'root': os.path.dirname(os.path.abspath(__file__)),
