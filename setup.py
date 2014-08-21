@@ -1,7 +1,6 @@
 from setuptools import setup
 import os
 
-
 long_description = ''
 long_description_fname = 'README.rst'
 
@@ -21,6 +20,7 @@ if 'TOXENV' in os.environ:
     version = '0.0.0-tox'
 else:
     version = None
+
 
 setup(
     name='i2p.i2cp',
