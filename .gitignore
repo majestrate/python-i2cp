@@ -6,3 +6,5 @@ version.txt
 build
 dist
 *.egg-info
+*.egg
+.idea
