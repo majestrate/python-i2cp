@@ -16,11 +16,7 @@ if os.path.exists(install_requires_fname):
     with open(install_requires_fname, 'r') as infile:
         install_requires = infile.read().split()
 
-if 'TOXENV' in os.environ:
-    version = '0.0.0-tox'
-else:
-    version = None
-
+version = '0.0.1'
 
 setup(
     name='i2p.i2cp',
@@ -44,11 +40,6 @@ setup(
     ],
     license='Public Domain',
     version=version,
-    setup_requires=(not version and ['vcversioner>=1'] or []),
-    vcversioner=(not version and {
-        'version_module_paths': ['i2p/i2cp/_version.py'],
-        'root': os.path.dirname(os.path.abspath(__file__)),
-    } or None),
     install_requires=install_requires,
     packages=['i2p.i2cp', 'i2p.i2cp.test'],
 )
