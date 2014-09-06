@@ -78,7 +78,7 @@ class Connection(object):
     def generate_dest(self, keyfile):
         if not os.path.exists(keyfile):
             if self.curve25519:
-                destination.generate_ed25519(keyfile)
+                destination.generate_curve25519(keyfile)
             else:
                 destination.generate_dsa(keyfile)
         self.dest = destination.load(keyfile)
