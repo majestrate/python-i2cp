@@ -47,7 +47,7 @@ class I2CPHandler(object):
 
 class Connection(object):
 
-    def __init__(self, handler, session_options={}, keyfile='i2cp.key', i2cp_host='127.0.0.1', i2cp_port=7654, curve25519=True):
+    def __init__(self, handler, session_options={}, keyfile='i2cp.key', i2cp_host='127.0.0.1', i2cp_port=7654, curve25519=False):
         self._i2cp_addr = (i2cp_host, i2cp_port)
         self._sock = socket.socket()
         self._log = logging.getLogger('I2CP-Connection-%s-%d' % self._i2cp_addr)
