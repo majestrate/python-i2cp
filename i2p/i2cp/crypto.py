@@ -1,3 +1,14 @@
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
+from future.builtins import bytes
+from future.builtins import int
+from future.builtins import open
+from future.builtins import str
+from future.builtins import pow
+from future import standard_library
+standard_library.install_hooks()
 
 from Crypto.Hash import SHA, SHA256
 from Crypto.PublicKey import ElGamal, DSA

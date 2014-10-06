@@ -42,38 +42,3 @@ class TestCrypto(TestCase):
             assert True
         else:
             assert False
-    
-    def test_25519_sign_verify_valid(self):
-        key = crypto.NaclGenerate()
-
-        assert key is not None
-
-        signed = key.sign(self.data)
-        
-        assert signed is not None
-        assert len(signed) - len(self.data) == 64
-        try:
-            assert key.verify_key.verify(signed)    
-        except:
-            assert False
-        else:
-            assert True
-
-    def test_25519_sign_verify_invalid(self):
-        key = crypto.NaclGenerate()
-
-        assert key is not None
-
-        signed = key.sign(self.data)
-        
-        assert signed is not None
-        assert len(signed) - len(self.data) == 64
-        signed = bytearray(signed)
-        signed[5] ^= 26
-        signed = crypto.nacl.SignedMessage(signed)
-        try:
-            assert not key.verify_key.verify(signed)
-        except:
-            assert True
-        else:
-            assert False

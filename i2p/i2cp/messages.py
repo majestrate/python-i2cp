@@ -12,10 +12,11 @@ import io
 import logging
 import random
 import struct
-
-from .util import *
-from .datatypes import *
-from .exceptions import *
+from enum import Enum
+from . import util 
+from . import datatypes 
+from . import exceptions 
+from . import crypto
 
 class message_type(Enum):
     CreateSession = 1
@@ -74,7 +75,7 @@ class Message(object):
         elif fd:
             type, body = self.parse(fd)
         self.type = type
-        self.body = body or bytearray()
+        self.body = body or bytes()
 
     def serialize(self):
         """
@@ -105,15 +106,15 @@ class HostLookupMessage(Message):
             if isinstance(req_timeout, float):
                 req_timeout *= 1000
             self.timeout = int(req_timeout)
-            self.sid = sid or NO_SESSION_ID
-            self.rid = rid or random().randint(1, 2 ** 16)
-            body = bytearray()
+            self.sid = sid or util.NO_SESSION_ID
+            self.rid = rid or random.randint(1, 2 ** 16)
+            body = bytes()
             body += struct.pack('>H', self.sid)
             body += struct.pack('>I', self.rid)
             body += struct.pack('>I', self.timeout)
             self.req_type = 1
 
-            name = i2p_string.create(name)
+            name = datatypes.i2p_string.create(name)
 
             body += struct.pack('>B', self.req_type)
             body += name
@@ -134,7 +135,7 @@ class HostLookupReplyMessage(Message):
             self.code = self.body[6]
             self.dest = None
             if self.code == 0:
-                self.dest = destination(raw=self.body[7:],b64=False)
+                self.dest = datatypes.destination(raw=self.body[7:],b64=False)
         else:
             raise NotImplemented()
 
@@ -152,7 +153,7 @@ class CreateSessionMessage(Message):
             data = bytearray()
             _dest = dest.serialize()
             self._log.debug('dest len: %d' % len(_dest))
-            opts = mapping(self.opts).serialize()
+            opts = datatypes.mapping(self.opts).serialize()
             self._log.debug('opts: %s' % opts)
             data += _dest
             data += opts
@@ -182,9 +183,9 @@ class RequestLSMessage(Message):
             tid = struct.unpack('>I', raw[:4])[0]
             raw = raw[4:]
             numtun -= 1
-            self.leases.append(lease(ri_hash=ri, tid=tid))
+            self.leases.append(datatypes.lease(ri_hash=ri, tid=tid))
         self._log.debug('left over data: %d bytes' % len(raw))
-        self.date = date(raw)
+        self.date = datatypes.date(raw)
 
     def __str__(self):
         return '[RequestLS sid=%d date=%s leases=%s date=%s]' % (self.sid,
@@ -202,8 +203,8 @@ class CreateLSMessage(Message):
         else:
             body = bytearray()
             body += struct.pack('>H', sid)
-            body += dsa_private_key_to_bytes(sigkey)
-            body += elgamal_private_key_to_bytes(enckey)
+            body += crypto.dsa_private_key_to_bytes(sigkey)
+            body += crypto.elgamal_private_key_to_bytes(enckey)
             body += leaseset.serialize()
             Message.__init__(self, type=message_type.CreateLS, body=body)
             self.sid = sid
@@ -221,9 +222,9 @@ class DisconnectMessage(Message):
     def __init__(self, raw=None, reason='kthnxbai'):
         if raw:
             Message.__init__(self, raw=raw)
-            self.reason = i2p_string.parse(self.body)
+            self.reason = datatypes.i2p_string.parse(self.body)
         else:
-            Message.__init__(self, message_type.Disconnect, i2p_string.create(reason))
+            Message.__init__(self, message_type.Disconnect, datatypes.i2p_string.create(reason))
             self.reason = reason
 
     def __str__(self):
@@ -263,7 +264,7 @@ class MessagePayloadMessage(Message):
         data = self.body
         self.sid = struct.unpack('>H', data[:2])[0]
         self.mid = struct.unpack('>I', data[2:6])[0]
-        self.payload = i2cp_payload(raw=data[6:])
+        self.payload = datatypes.i2cp_payload(raw=data[6:])
 
     def __str__(self):
         return '[MessagePayload sid=%d mid=%d payload=%s]' % (self.sid, self.mid, self.payload)
@@ -273,7 +274,7 @@ class SendMessageMessage(Message):
     def __init__(self, sid, dest, payload, nonce=None):
         if nonce is None:
             nonce = 0
-        body = bytearray()
+        body = bytes()
         body += struct.pack('>H', sid)
         body += dest.serialize()
         body += payload

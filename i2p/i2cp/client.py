@@ -12,10 +12,12 @@ import os
 import queue
 import socket
 from threading import Thread
-from .exceptions import *
-from .messages import *
-from .datatypes import *
-from .util import *
+import time
+from . import exceptions 
+from . import messages 
+from . import datatypes 
+from . import util
+from . import crypto
 
 class I2CPHandler(object):
 
@@ -61,8 +63,7 @@ class Connection(object):
         self.keyfile = keyfile
         self.opts = dict(session_options)
         self.opts['i2cp.fastReceive'] = 'true'
-        self.send_dgram = self.send_curve25519_dgram
-        self.curve25519 = curve25519
+        self.send_dgram = self.send_dsa_dgram
         self._threads = list()
 
     def is_open(self):
@@ -73,19 +74,16 @@ class Connection(object):
         self._sock.connect(self._i2cp_addr)
         self._sfd = self._sock.makefile('rwb')
         self._connected = True
-        self._send_raw(PROTOCOL_VERSION)
+        self._send_raw(util.PROTOCOL_VERSION)
 
     def generate_dest(self, keyfile):
         if not os.path.exists(keyfile):
-            if self.curve25519:
-                destination.generate_curve25519(keyfile)
-            else:
-                destination.generate_dsa(keyfile)
-        self.dest = destination.load(keyfile)
+            datatypes.destination.generate_dsa(keyfile)
+        self.dest = datatypes.destination.load(keyfile)
 
     def _recv_msg(self):
         self._log.debug('recv...')
-        msg, raw = Message.parse(self._sfd, parts=False)
+        msg, raw = messages.Message.parse(self._sfd, parts=False)
         self._log.debug('got message: %s' %msg)
         return msg, raw
         
@@ -93,7 +91,7 @@ class Connection(object):
         if self.dest is None:
             self.generate_dest(self.keyfile)
         self._log.info('out dest is %s' % self.dest.base32())
-        msg = Message(message_type.GetDate)
+        msg = messages.Message(messages.message_type.GetDate)
         self._send_msg(msg)
         self._threads.append(Thread(target=self._run_recv,args=()))
         self._threads.append(Thread(target=self._run_send,args=()))
@@ -101,12 +99,12 @@ class Connection(object):
             t.start()
         
     def _handle_request_ls(self, raw):
-        msg = RequestLSMessage(raw=raw)
+        msg = messages.RequestLSMessage(raw=raw)
         l = msg.leases[0]
-        enckey = ElGamalGenerate()
-        sigkey = DSAGenerate()
-        ls = leaseset(leases=[l],dest=self.dest, ls_enckey=enckey, ls_sigkey=sigkey)
-        msg = CreateLSMessage(
+        enckey = crypto.ElGamalGenerate()
+        sigkey = crypto.DSAGenerate()
+        ls = datatypes.leaseset(leases=[l],dest=self.dest, ls_enckey=enckey, ls_sigkey=sigkey)
+        msg = messages.CreateLSMessage(
             sid=self._sid,
             sigkey=sigkey,
             enckey=enckey,
@@ -137,43 +135,43 @@ class Connection(object):
             self._log.warn('bad message')
             return
         self._log.info('client got %s message' % msg.type.name)
-        if msg.type == message_type.Disconnect:
-            msg = DisconnectMessage(raw=raw)
+        if msg.type == messages.message_type.Disconnect:
+            msg = messages.DisconnectMessage(raw=raw)
             self._log.warn('disconnected: %s' % msg.reason)
             self.handler.disconnected(msg.reason)
             self.close()
-        if msg.type == message_type.RequestLS:
+        if msg.type == messages.message_type.RequestLS:
             self._handle_request_ls(raw)
-        if msg.type == message_type.MessagePayload:
-            msg = MessagePayloadMessage(raw=raw)
+        if msg.type == messages.message_type.MessagePayload:
+            msg = messages.MessagePayloadMessage(raw=raw)
             self._log.debug('handle_message: %s' % msg)
             self._handle_payload(msg.payload)
-        if msg.type == message_type.HostLookupReply:
-            msg = HostLookupReplyMessage(raw=raw)
+        if msg.type == messages.message_type.HostLookupReply:
+            msg = messages.HostLookupReplyMessage(raw=raw)
             dest = msg.dest
             self._pending_name_lookups.pop(msg.rid)(dest)
-        if msg.type == message_type.MessageStatus:
-            msg = MessageStatusMessage(raw=raw)
+        if msg.type == messages.message_type.MessageStatus:
+            msg = messages.MessageStatusMessage(raw=raw)
             self._log.debug('message status: %s' % msg.status)
-        if msg.type == message_type.RequestLS:
+        if msg.type == messages.message_type.RequestLS:
             self._handle_request_ls(raw)
-        if msg.type == message_type.SessionStatus:
-            msg = SessionStatusMessage(raw=raw)
+        if msg.type == messages.message_type.SessionStatus:
+            msg = messages.SessionStatusMessage(raw=raw)
             self._log.debug('session status: %s' % msg)
-            if msg.status == session_status.REFUSED:
+            if msg.status == messages.session_status.REFUSED:
                 self._log.error('session rejected')
                 self.handler.session_failed(self)
                 self.close()
-            elif msg.status == session_status.DESTROYED:
+            elif msg.status == messages.session_status.DESTROYED:
                 self._log.error('session destroyed')
                 self.handler.session_destroyed()
                 self.close()
-            elif msg.status == session_status.CREATED:
+            elif msg.status == messages.session_status.CREATED:
                 self._log.info('session created')
                 self._sid = msg.sid
                 Thread(target=self.handler.session_made, args=(self,)).start()
-        if msg.type == message_type.SetDate and self._sid is None:
-            msg = CreateSessionMessage(dest=self.dest, opts=self.opts, date=date())
+        if msg.type == messages.message_type.SetDate and self._sid is None:
+            msg = messages.CreateSessionMessage(dest=self.dest, opts=self.opts, date=datatypes.date())
             self._send_msg(msg)
 
     def _host_not_found(self, rid):
@@ -182,20 +180,16 @@ class Connection(object):
 
 
     def _async_lookup(self, name, hook):
-        msg = HostLookupMessage(name=name, sid=self._sid)
+        msg = messages.HostLookupMessage(name=name, sid=self._sid)
         self._pending_name_lookups[msg.rid] = hook
         self._send_msg(msg)
 
     def _handle_payload(self, payload):
-        if payload.proto == i2cp_protocol.DGRAM:
+        if payload.proto == datatypes.i2cp_protocol.DGRAM:
             self._log.debug('dgram payload=%s' % payload.data)
-            dgram = dsa_datagram(raw=payload.data)
+            dgram = datatypes.dsa_datagram(raw=payload.data)
             self.handler.got_dgram(dgram.dest, dgram.payload, payload.srcport, payload.dstport)
-        elif payload.proto == i2cp_protocol.DGRAM_CURVE25519:
-            self._log.debug('dgram-ED25519 payload=%s' % payload.data)
-            dgram = curve25519_datagram(raw=payload.data)
-            self.handler.got_dgram(dgram.dest, dgram.payload, payload.srcport, payload.dstport)
-        elif payload.proto == i2cp_protocol.RAW:
+        elif payload.proto == datatypes.i2cp_protocol.RAW:
             self._log.debug('dgram-raw paylod=%s' % payload.data)
             self.handler.got_dgram(None, payload.data, payload.srcport, payload.dstport)
         else:
@@ -204,13 +198,10 @@ class Connection(object):
         
 
     def send_raw_dgram(self, dest, data, srcport=0, dstport=0):
-        self._send_dgram(raw_datagram, dest, data, srcport, dstport)
+        self._send_dgram(datatypes.raw_datagram, dest, data, srcport, dstport)
 
-    def send_curve25519_dgram(self, dest, data, srcport=0, dstport=0):
-        self._send_dgram(curve25519_datagram, dest, data, srcport, dstport)
-        
     def send_dsa_dgram(self, dest, data, srcport=0, dstport=0):
-        self._send_dgram(dsa_datagram, dest, data, srcport, dstport)
+        self._send_dgram(datatypes.dsa_datagram, dest, data, srcport, dstport)
 
     def _send_dgram(self, dgram_class, dest, data, srcport=0, dstport=0):
         if isinstance(data, str):
@@ -221,10 +212,10 @@ class Connection(object):
                 return
             self._log.info('send %d bytes to %s'%(len(data), _dest.base32()))
             dgram = dgram_class(dest=self.dest, payload=data).serialize()
-            self._log.debug('dgram=%s' % dgram)
-            p = i2cp_payload(proto=dgram_class.protocol ,srcport=srcport,dstport=dstport, data=dgram)
-            self._log.debug('payload=%s' % p)
-            msg = SendMessageMessage(sid=self._sid, dest=_dest, payload=p.serialize())
+            self._log.debug('dgram=%s' % [dgram])
+            p = datatypes.i2cp_payload(proto=dgram_class.protocol ,srcport=srcport,dstport=dstport, data=dgram)
+            self._log.debug('payload=%s' % [p])
+            msg = messages.SendMessageMessage(sid=self._sid, dest=_dest, payload=p.serialize())
             self._send_msg(msg)
 
         if isinstance(dest, str):
@@ -266,16 +257,16 @@ class Connection(object):
 
 def lookup(name, i2cp_host='127.0.0.1', i2cp_port=7654):
     if not name.endswith('.i2p'):
-        return destination(name, b64=True)
+        return datatypes.destination(name, b64=True)
     c = Connection(I2CPHandler(), i2cp_host=i2cp_host, i2cp_port=i2cp_port)
     dest = None
     try:
         c.open()
-        msg = HostLookupMessage(name=name, sid=c._sid)
+        msg = messages.HostLookupMessage(name=name, sid=c._sid)
         c._send_raw(msg.serialize())
         msg, raw = c._recv_msg()
-        if msg.type == message_type.HostLookupReply:
-            msg = HostLookupReplyMessage(raw=raw)
+        if msg.type == messages.message_type.HostLookupReply:
+            msg = messages.HostLookupReplyMessage(raw=raw)
             c._log.debug(msg)
             dest = msg.dest
     except KeyboardInterrupt:

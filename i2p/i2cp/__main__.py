@@ -26,7 +26,7 @@ class Handler(I2CPHandler):
     def send_loop(self, conn):
         while conn.is_open():
             if self.dest is not None:
-                conn.send_ed25519_dgram(self.dest, self.data)
+                conn.send_dgram(self.dest, self.data)
             time.sleep(1)
 
     def got_dgram(self, dest, data, srcport, dstport):

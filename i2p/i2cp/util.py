@@ -3,6 +3,7 @@ from __future__ import unicode_literals
 from __future__ import division
 from __future__ import absolute_import
 from future.builtins import int
+from future.builtins import bytes
 from future import standard_library
 standard_library.install_hooks()
 
@@ -22,7 +23,7 @@ def timeout(sec):
 
 def isdesthash(name):
     if isinstance(name, bytes):
-        name = name.decode('ascii')
+        name = name.decode('utf-8')
     parts = name.split('.')
     if len(parts) != 3:
         return False
@@ -33,7 +34,7 @@ def isdesthash(name):
 
 def i2p_b64encode(data):
     if isinstance(data, str):
-        data = data.encode('ascii')
+        data = bytes(data, 'ascii')
     return base64.b64encode(data, b'-~')
 
 def i2p_b64decode(data):
@@ -44,7 +45,7 @@ def i2p_b32encode(data):
 
 def i2p_compress(data):
     if isinstance(data, str):
-        data = data.encode('utf-8')
+        data = bytes(data, 'utf-8')
     return zlib.compress(data)[2:]
 
 def i2p_decompress(data):
