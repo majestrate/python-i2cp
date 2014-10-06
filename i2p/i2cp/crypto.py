@@ -1,12 +1,3 @@
-from __future__ import print_function
-from __future__ import unicode_literals
-from __future__ import division
-from __future__ import absolute_import
-from future.builtins import int
-from future.builtins import open
-from future.builtins import pow
-from future import standard_library
-standard_library.install_hooks()
 
 from Crypto.Hash import SHA, SHA256
 from Crypto.PublicKey import ElGamal, DSA
@@ -16,7 +7,7 @@ from .exceptions import *
 import codecs
 import math
 import string
-import nacl.signing as nacl
+#import nacl.signing as nacl
 
 sha1 = lambda x: SHA.new(x).digest()
 sha256 = lambda x: SHA256.new(x).digest()
@@ -172,15 +163,18 @@ def load_keypair(fd):
 
 
 def NaclPublicKey(data):
-    return nacl.VerifyKey(key=data)
+    #return nacl.VerifyKey(key=data)
+    pass
 
 def NaclGenerate():
-    return nacl.SigningKey(nacl.random())
+    #return nacl.SigningKey(nacl.random())
+    pass
 
 def nacl_key_to_public_bytes(key):
-    if hasattr(key, 'verify_key'):
-        key = key.verify_key
-    return key.encode()
+    #if hasattr(key, 'verify_key'):
+    #    key = key.verify_key
+    #return key.encode()
+    pass
 
 if __name__ == '__main__':
     data = b'testdata'
