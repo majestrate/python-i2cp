@@ -198,6 +198,10 @@ class Connection(object):
         elif payload.proto == i2cp_protocol.RAW:
             self._log.debug('dgram-raw paylod=%s' % payload.data)
             self.handler.got_dgram(None, payload.data, payload.srcport, payload.dstport)
+        else:
+            self._log.debug('streaming payload=%s' % payload.data)
+            self.handler.got_dgram(None, payload.data, payload.srcport, payload.dstport)
+        
 
     def send_raw_dgram(self, dest, data, srcport=0, dstport=0):
         self._send_dgram(raw_datagram, dest, data, srcport, dstport)
