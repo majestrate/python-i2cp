@@ -4,6 +4,7 @@ from __future__ import division
 from __future__ import absolute_import
 from future.builtins import dict
 from future.builtins import object
+from future.builtins import bytes
 from future import standard_library
 standard_library.install_hooks()
 
@@ -205,7 +206,7 @@ class Connection(object):
 
     def _send_dgram(self, dgram_class, dest, data, srcport=0, dstport=0):
         if isinstance(data, str):
-            data = data.encode('utf-8')
+            data = bytes(data, 'utf-8')
         def runit(_dest):
             if _dest is None:
                 self._log.warn('no such host: %s' % dest)
