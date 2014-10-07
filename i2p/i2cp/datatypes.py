@@ -1,15 +1,4 @@
-from __future__ import unicode_literals
-from __future__ import print_function
-from __future__ import division
-from __future__ import absolute_import
-from future.builtins import bytes
-from future.builtins import int
-from future.builtins import open
-from future.builtins import str
-from future import standard_library
-#standard_library.install_hooks()
-from future.builtins import object
-
+from future.builtins import int, bytes
 from . import util 
 from . import crypto 
 from enum import Enum
@@ -49,7 +38,7 @@ class certificate(object):
         return '[cert type=%s data=%s]' % (self.type.name, self.data)
 
     def serialize(self, b64=False):
-        data = bytes()
+        data = bytearray()
         data += struct.pack('>B', self.type.value)
         data += struct.pack('>H', len(self.data))
         data += self.data
@@ -120,7 +109,7 @@ class destination(object):
         destination._log.debug('dest len=%d' %len(data))
         if b64:
             data = util.i2p_b64decode(data)
-        ctype = certificate_type(data[384])
+        ctype = certificate_type(util.get_as_int(data[384]))
         clen = struct.unpack('>H', data[385:387])[0]
         cert = certificate(ctype, data[387:387+clen])
         if cert.type == certificate_type.NULL:
@@ -205,9 +194,7 @@ class i2p_string(object):
 
     @staticmethod
     def parse(data):
-        if isinstance(data, str):
-            data = bytes(data, 'utf-8')
-        dlen = data[0]
+        dlen = ord(data[0])
         return data[:dlen].decode('utf-8')
 
     @staticmethod
@@ -267,9 +254,12 @@ class mapping(object):
             data = bytearray()
             keys = sorted(self.opts.keys())
             for key in keys:
-                val = str(opts[key])
-                data += i2p_string.create(key) + b'='
-                data += i2p_string.create(val) + b';'
+                val = bytes(opts[key], 'utf-8')
+                key = bytes(key, 'utf-8')
+                data += i2p_string.create(key) 
+                data += bytes('=', 'utf-8')
+                data += i2p_string.create(val) 
+                data += bytes(';', 'utf-8')
             dlen = len(data)
             self._log.debug('len of mapping is %d bytes' % dlen)
             dlen = struct.pack('>H', dlen)
@@ -326,17 +316,17 @@ class dsa_datagram(datagram):
         if raw:
             self._log.debug('rawlen=%d' % len(raw))
             self.data = raw
-            self._log.debug('load dgram data: %s' % raw)
+            self._log.debug('load dgram data: %s' %[ raw ])
             self.dest = destination(raw=raw)
             self._log.debug('destlen=%s' % self.dest)
             raw = raw[len(self.dest):]
-            self._log.debug('raw=%s' % raw)
+            self._log.debug('raw=%s' % [raw])
             self.sig = raw[:40]
             raw = raw[40:]
             self._log.debug('payloadlen=%d' % len(raw))
             self.payload = raw
             phash = crypto.sha256(self.payload)
-            self._log.debug('verify dgram: sig=%s hash=%s' % (self.sig, phash))
+            self._log.debug('verify dgram: sig=%s hash=%s' % ([self.sig], [phash]))
             self.dest.verify(phash, self.sig)
         else:
             self.dest = dest
@@ -372,9 +362,9 @@ class i2cp_payload(object):
             self.srcport = struct.unpack('>H', data[4:6])[0]
             self.dstport = struct.unpack('>H', data[6:8])[0]
             self.xflags = data[8]
-            self.proto = i2cp_protocol(data[9])
+            self.proto = i2cp_protocol(ord(str(data[9])))
             self.data = util.i2p_decompress(data[10:])
-            self._log.debug('decompressed=%s' % self.data)
+            self._log.debug('decompressed=%s' % [self.data])
         else:
             if util.check_portnum(srcport) and util.check_portnum(dstport):
                 self._log.debug('payload data len=%d' %len(data))
@@ -386,7 +376,7 @@ class i2cp_payload(object):
                 self.flags = 0
                 self.xflags = 2
             else:
-                raise ValueError('invalid ports: srcport=%s dstport=%s' % (srcport, dstport))
+                raise ValueError('invalid ports: srcport=%s dstport=%s' % ([srcport], [dstport]))
 
     def serialize(self):
         data = bytearray()

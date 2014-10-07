@@ -1,13 +1,4 @@
-from __future__ import unicode_literals
-from __future__ import print_function
-from __future__ import division
-from __future__ import absolute_import
-from future.builtins import bytes
-from future.builtins import int
-from future import standard_library
-standard_library.install_hooks()
-from future.builtins import object
-
+from future.builtins import str, int
 import io
 import logging
 import random
@@ -174,7 +165,7 @@ class RequestLSMessage(Message):
         raw = self.body
         self.leases = []
         self.sid = struct.unpack('>H',raw[:2])
-        numtun  = raw[2]
+        numtun = util.get_as_int(raw[2])
         self._log.debug('got %d leases' % numtun)
         raw = raw[3:]
         while numtun > 0:
@@ -248,7 +239,7 @@ class SessionStatusMessage(Message):
         self._log.debug('body_len=%d' %len(self.body))
         self.sid = struct.unpack('>H', self.body[:2])[0]
         self._log.debug('sid=%d' % self.sid)
-        status = self.body[2]
+        status = util.get_as_int(self.body[2])
         self.status = session_status(status)
 
     def __str__(self):

@@ -1,13 +1,4 @@
-from __future__ import unicode_literals
-from __future__ import print_function
-from __future__ import division
-from __future__ import absolute_import
-from future.builtins import dict
-from future.builtins import object
 from future.builtins import bytes
-from future import standard_library
-standard_library.install_hooks()
-
 import logging
 import os
 import queue
@@ -85,7 +76,7 @@ class Connection(object):
     def _recv_msg(self):
         self._log.debug('recv...')
         msg, raw = messages.Message.parse(self._sfd, parts=False)
-        self._log.debug('got message: %s' %msg)
+        self._log.debug('got message: %s' % [ msg ] )
         return msg, raw
         
     def start(self):
@@ -187,14 +178,14 @@ class Connection(object):
 
     def _handle_payload(self, payload):
         if payload.proto == datatypes.i2cp_protocol.DGRAM:
-            self._log.debug('dgram payload=%s' % payload.data)
+            self._log.debug('dgram payload=%s' % [ payload.data ])
             dgram = datatypes.dsa_datagram(raw=payload.data)
             self.handler.got_dgram(dgram.dest, dgram.payload, payload.srcport, payload.dstport)
         elif payload.proto == datatypes.i2cp_protocol.RAW:
-            self._log.debug('dgram-raw paylod=%s' % payload.data)
+            self._log.debug('dgram-raw paylod=%s' % [ payload.data ])
             self.handler.got_dgram(None, payload.data, payload.srcport, payload.dstport)
         else:
-            self._log.debug('streaming payload=%s' % payload.data)
+            self._log.debug('streaming payload=%s' % [ payload.data ] )
             self.handler.got_dgram(None, payload.data, payload.srcport, payload.dstport)
         
 
@@ -232,7 +223,7 @@ class Connection(object):
             self._log.error('cannot send data, connection closed')
             return
         try:
-            self._log.debug('--> %s' % data)
+            self._log.debug('--> %s' % [data])
         except UnicodeDecodeError:
             # TODO Fix for Python 2
             pass

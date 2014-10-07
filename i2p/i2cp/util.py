@@ -1,12 +1,4 @@
-from __future__ import print_function
-from __future__ import unicode_literals
-from __future__ import division
-from __future__ import absolute_import
-from future.builtins import int
-from future.builtins import bytes
-from future import standard_library
-standard_library.install_hooks()
-
+from future.builtins import int, bytes, str
 import base64
 import struct
 import zlib
@@ -15,6 +7,13 @@ BUFFER_SIZE = 1024
 NO_SESSION_ID = 65535
 PROTOCOL_VERSION = b'\x2a'
 _desthash_valid = '1234567890qwertyuiopasdfghjklzxcvbnm'
+
+
+def get_as_int(data):
+    if isinstance(data, int):
+        return data
+    else:
+        return ord(data)
 
 def timeout(sec):
     sec *= 1000

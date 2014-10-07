@@ -16,7 +16,7 @@ if os.path.exists(install_requires_fname):
     with open(install_requires_fname, 'r') as infile:
         install_requires = infile.read().split()
 
-version = '0.0.1'
+version = '0.0.2'
 
 setup(
     name='i2p.i2cp',
