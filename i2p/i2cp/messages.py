@@ -123,7 +123,7 @@ class HostLookupReplyMessage(Message):
             Message.__init__(self, raw=raw)
             self.sid = struct.unpack('>H', self.body[:2])[0]
             self.rid = struct.unpack('>I', self.body[2:6])[0]
-            self.code = self.body[6]
+            self.code = util.get_as_int(self.body[6])
             self.dest = None
             if self.code == 0:
                 self.dest = datatypes.destination(raw=self.body[7:],b64=False)
