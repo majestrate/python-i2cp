@@ -1,6 +1,7 @@
-from future.builtins import int, bytes
-from . import util 
-from . import crypto 
+from __future__ import absolute_import, division, print_function, unicode_literals
+from builtins import *
+from . import util
+from . import crypto
 from enum import Enum
 import logging
 import struct
@@ -20,7 +21,7 @@ class certificate(object):
     _log = logging.getLogger('certificate')
 
     def __init__(self, type=certificate_type.NULL, data=bytes(), b64=True):
-        
+
         if isinstance(type, int) or isinstance(type, certificate_type):
             type = certificate_type(type)
         if isinstance(type, str):
@@ -143,9 +144,9 @@ class destination(object):
     def __init__(self, enckey=None, sigkey=None, cert=None, raw=None, b64=False, edkey=None):
         if raw:
             enckey, sigkey, cert, edkey = self.parse(raw, b64)
-        self.enckey = enckey 
-        self.sigkey = sigkey 
-        self.cert = cert 
+        self.enckey = enckey
+        self.sigkey = sigkey
+        self.cert = cert
         self.edkey = edkey
 
     def sign(self, data):
@@ -183,7 +184,7 @@ class destination(object):
         if self.cert.type == certificate_type.NULL:
             data += crypto.elgamal_public_key_to_bytes(self.enckey)
             data += crypto.dsa_public_key_to_bytes(self.sigkey)
-            data += self.cert.serialize()        
+            data += self.cert.serialize()
         self._log.debug('serialize len=%d' % len(data))
         return data
 
@@ -256,9 +257,9 @@ class mapping(object):
             for key in keys:
                 val = bytes(opts[key], 'utf-8')
                 key = bytes(key, 'utf-8')
-                data += i2p_string.create(key) 
+                data += i2p_string.create(key)
                 data += bytes('=', 'utf-8')
-                data += i2p_string.create(val) 
+                data += i2p_string.create(val)
                 data += bytes(';', 'utf-8')
             dlen = len(data)
             self._log.debug('len of mapping is %d bytes' % dlen)
@@ -342,8 +343,8 @@ class dsa_datagram(datagram):
         return self.data
 
     def __str__(self):
-        return '[DSADatagram payload=%s sig=%s]' % ( self.payload, self.sig) 
-    
+        return '[DSADatagram payload=%s sig=%s]' % ( self.payload, self.sig)
+
 
 class i2cp_payload(object):
 

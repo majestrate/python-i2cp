@@ -1,9 +1,5 @@
-from __future__ import unicode_literals
-from __future__ import print_function
-from __future__ import division
-from __future__ import absolute_import
-from future import standard_library
-standard_library.install_hooks()
+from __future__ import absolute_import, division, print_function, unicode_literals
+from builtins import *
 
 from argparse import ArgumentParser as AP
 import logging
@@ -32,7 +28,7 @@ class Handler(I2CPHandler):
     def got_dgram(self, dest, data, srcport, dstport):
         self._log.info('got dgram from %s:%d to port %d : %s' % (
             dest, srcport, dstport, data))
-        
+
     def session_made(self, conn):
         self.process = Thread(target=self.send_loop, args=(conn,))
         self.process.start()
@@ -68,6 +64,6 @@ def main():
     c1.open()
 
     c1.start()
-    
+
 if __name__ == '__main__':
     main()

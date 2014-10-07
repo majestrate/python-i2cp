@@ -1,13 +1,14 @@
-from future.builtins import bytes
+from __future__ import absolute_import, division, print_function, unicode_literals
+from builtins import *
 import logging
 import os
 import queue
 import socket
 from threading import Thread
 import time
-from . import exceptions 
-from . import messages 
-from . import datatypes 
+from . import exceptions
+from . import messages
+from . import datatypes
 from . import util
 from . import crypto
 
@@ -17,7 +18,7 @@ class I2CPHandler(object):
         """
         called every time we get a valid datagram
         """
-    
+
     def session_made(self, conn):
         """
         called after an i2cp session is made successfully with the i2p router
@@ -26,7 +27,7 @@ class I2CPHandler(object):
 
     def session_refused(self):
         """
-        called if the i2p router refuses an i2cp session 
+        called if the i2p router refuses an i2cp session
         """
 
     def disconnected(self, reason):
@@ -78,7 +79,7 @@ class Connection(object):
         msg, raw = messages.Message.parse(self._sfd, parts=False)
         self._log.debug('got message: %s' % [ msg ] )
         return msg, raw
-        
+
     def start(self):
         if self.dest is None:
             self.generate_dest(self.keyfile)
@@ -89,7 +90,7 @@ class Connection(object):
         self._threads.append(Thread(target=self._run_send,args=()))
         for t in self._threads:
             t.start()
-        
+
     def _handle_request_ls(self, raw):
         msg = messages.RequestLSMessage(raw=raw)
         l = msg.leases[0]
@@ -103,7 +104,7 @@ class Connection(object):
             leaseset=ls)
         self._log.debug(msg)
         self._send_msg(msg)
-        
+
     def _flush_sendq(self):
         while not self._sendq.empty():
             msg = self._sendq.get_nowait()
@@ -121,7 +122,7 @@ class Connection(object):
         while self._connected:
             msg, raw = self._recv_msg()
             self._handle_message(raw, msg)
-    
+
     def _handle_message(self, raw, msg):
         if msg is None or msg.type is None:
             self._log.warn('bad message')
@@ -187,7 +188,7 @@ class Connection(object):
         else:
             self._log.debug('streaming payload=%s' % [ payload.data ] )
             self.handler.got_dgram(None, payload.data, payload.srcport, payload.dstport)
-        
+
 
     def send_raw_dgram(self, dest, data, srcport=0, dstport=0):
         self._send_dgram(datatypes.raw_datagram, dest, data, srcport, dstport)

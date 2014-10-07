@@ -1,3 +1,5 @@
+from __future__ import absolute_import, division, print_function, unicode_literals
+from builtins import *
 from i2p.i2cp import client
 from unittest import TestCase
 
@@ -5,7 +7,7 @@ import queue
 import time
 
 class TestEchoHandler(client.I2CPHandler):
-    
+
     def __init__(self, data, srcport, dstport, dgrams):
         self.data = data
         self.srcport = srcport
@@ -22,10 +24,10 @@ class TestEchoHandler(client.I2CPHandler):
         for n in range(self.num_dgram):
             print('send %d' % n)
             conn.send_dgram(self.dest, self.data, srcport=self.srcport, dstport=self.dstport)
-        
+
 """
 class TestI2CP(TestCase):
-    
+
 
     def setUp(self):
         self.dgram_data = 'test 12345'.encode('utf-8')
