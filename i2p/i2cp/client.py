@@ -136,7 +136,7 @@ class Connection(object):
             self._handle_request_ls(raw)
         if msg.type == messages.message_type.MessagePayload:
             msg = messages.MessagePayloadMessage(raw=raw)
-            self._log.debug('handle_message: %s' % msg)
+            self._log.debug('handle_message: %s' % [msg])
             self._handle_payload(msg.payload)
         if msg.type == messages.message_type.HostLookupReply:
             msg = messages.HostLookupReplyMessage(raw=raw)
@@ -149,7 +149,7 @@ class Connection(object):
             self._handle_request_ls(raw)
         if msg.type == messages.message_type.SessionStatus:
             msg = messages.SessionStatusMessage(raw=raw)
-            self._log.debug('session status: %s' % msg)
+            self._log.debug('session status: %s' % [ msg ])
             if msg.status == messages.session_status.REFUSED:
                 self._log.error('session rejected')
                 self.handler.session_failed(self)
