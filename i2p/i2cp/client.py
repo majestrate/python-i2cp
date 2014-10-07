@@ -1,4 +1,5 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
+from future.utils import native
 from builtins import *
 import logging
 import os
@@ -84,7 +85,7 @@ class Connection(object):
         if self.dest is None:
             self.generate_dest(self.keyfile)
         self._log.info('out dest is %s' % self.dest.base32())
-        msg = messages.Message(messages.message_type.GetDate)
+        msg = messages.GetDateMessage()
         self._send_msg(msg)
         self._threads.append(Thread(target=self._run_recv,args=()))
         self._threads.append(Thread(target=self._run_send,args=()))
@@ -93,6 +94,20 @@ class Connection(object):
 
     def _handle_request_ls(self, raw):
         msg = messages.RequestLSMessage(raw=raw)
+        l = msg.leases[0]
+        enckey = crypto.ElGamalGenerate()
+        sigkey = crypto.DSAGenerate()
+        ls = datatypes.leaseset(leases=[l],dest=self.dest, ls_enckey=enckey, ls_sigkey=sigkey)
+        msg = messages.CreateLSMessage(
+            sid=self._sid,
+            sigkey=sigkey,
+            enckey=enckey,
+            leaseset=ls)
+        self._log.debug(msg)
+        self._send_msg(msg)
+
+    def _handle_request_vls(self, raw):
+        msg = messages.RequestVarLSMessage(raw=raw)
         l = msg.leases[0]
         enckey = crypto.ElGamalGenerate()
         sigkey = crypto.DSAGenerate()
@@ -133,6 +148,8 @@ class Connection(object):
             self._log.warn('disconnected: %s' % msg.reason)
             self.handler.disconnected(msg.reason)
             self.close()
+        if msg.type == messages.message_type.RequestVarLS:
+            self._handle_request_vls(raw)
         if msg.type == messages.message_type.RequestLS:
             self._handle_request_ls(raw)
         if msg.type == messages.message_type.MessagePayload:
@@ -197,8 +214,10 @@ class Connection(object):
         self._send_dgram(datatypes.dsa_datagram, dest, data, srcport, dstport)
 
     def _send_dgram(self, dgram_class, dest, data, srcport=0, dstport=0):
-        if isinstance(data, str):
+        if not isinstance(data, bytes) and util.py3k:
             data = bytes(data, 'utf-8')
+        elif not util.py3k and not isinstance(data, str):
+            data = bytes(str(data), 'utf-8')
         def runit(_dest):
             if _dest is None:
                 self._log.warn('no such host: %s' % dest)

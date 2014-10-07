@@ -27,7 +27,7 @@ class Handler(I2CPHandler):
 
     def got_dgram(self, dest, data, srcport, dstport):
         self._log.info('got dgram from %s:%d to port %d : %s' % (
-            dest, srcport, dstport, data))
+            dest, srcport, dstport, [data]))
 
     def session_made(self, conn):
         self.process = Thread(target=self.send_loop, args=(conn,))

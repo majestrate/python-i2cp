@@ -5,6 +5,10 @@ import base64
 import struct
 import zlib
 
+import sys
+
+py3k = sys.version[0] == '3'
+
 BUFFER_SIZE = 1024
 NO_SESSION_ID = 65535
 PROTOCOL_VERSION = b'\x2a'

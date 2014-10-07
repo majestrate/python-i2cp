@@ -194,15 +194,16 @@ class i2p_string(object):
 
     @staticmethod
     def parse(data):
-        dlen = ord(data[0])
+        dlen = util.get_as_int(data[0])
         return data[:dlen].decode('utf-8')
 
     @staticmethod
     def create(data):
-        if isinstance(data, str):
-            data = bytes(data, 'utf-8')
         dlen = len(data)
+        if util.py3k and not isinstance(data, bytes):
+            data = bytes(data, 'utf-8')
         return util.struct_pack('>B', dlen) + data
+    
 
 class lease(object):
 
@@ -251,7 +252,7 @@ class mapping(object):
                 self.opts[key] = val
         else:
             self.opts = opts or {}
-            data = bytearray()
+            data = bytes()
             keys = sorted(self.opts.keys())
             for key in keys:
                 val = bytes(opts[key], 'utf-8')
@@ -336,7 +337,11 @@ class dsa_datagram(datagram):
             payload_hash = crypto.sha256(self.payload)
             self.sig = self.dest.sign(payload_hash)
             self._log.debug('signature=%s' % [ self.sig])
-            self.data += self.sig + self.payload
+            if util.py3k:
+                payload = self.payload
+            else:
+                payload = bytearray(self.payload, 'utf-8')
+            self.data += self.sig + payload
 
     def serialize(self):
         return self.data

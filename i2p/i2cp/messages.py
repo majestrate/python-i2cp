@@ -1,4 +1,5 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
+from future.utils import native
 from builtins import *
 import io
 import logging
@@ -83,11 +84,31 @@ class Message(object):
             # TODO Fix for Python 2
             return '[I2CPMessage type=%s]' % (self.type.name)
 
+
+class GetDateMessage(Message):
+    """
+    Used For Initial handshake
+    """
+    _log = logging.getLogger('GetDate')
+
+    def __init__(self, version='0.9.15', opts={}, raw=None):
+        if raw:
+            raise NotImplemented()
+        else:
+            body = bytes()
+            version = str(version)
+            version = datatypes.i2p_string.create(version)
+            self._log.debug(version)
+            body = native(body) + native(version)
+            body = native(body) + native(datatypes.mapping(opts=opts).serialize())
+            Message.__init__(self, type=message_type.GetDate, body=body)
+
 class HostLookupMessage(Message):
     """
     Host Lookup Message
     Send this to initiate a host lookup
     """
+    _log = logging.getLogger('HostLookup')
 
 
     def __init__(self, name=None, sid=None, rid=None, raw=None, req_timeout=5.0):
@@ -105,11 +126,14 @@ class HostLookupMessage(Message):
             body += util.struct_pack('>I', self.rid)
             body += util.struct_pack('>I', self.timeout)
             self.req_type = 1
-
+            self._log.debug(name)
             name = datatypes.i2p_string.create(name)
-
+            self._log.debug(name)
             body += util.struct_pack('>B', self.req_type)
-            body += name
+            if util.py3k:
+                body += name
+            else:
+                body += bytearray(name, 'utf-8')
             Message.__init__(self, type=message_type.HostLookup, body=body)
 
 
@@ -157,10 +181,24 @@ class CreateSessionMessage(Message):
     def __str__(self):
         return '[CreateSession opts=%s]' % self.opts
 
+class RequestVarLSMessage(Message):
+    
+    def __init__(self, raw):
+        Message.__init__(self, raw=raw)
+        raw = self.body 
+        self.sid = util.struct_unpack('>H', raw[:2])
+        num_ls = util.get_as_int(raw[2])
+        self.leases = []
+        while num_ls > 0:
+            ri = raw[:32]
+            raw = raw[32:]
+            tid = util.struct_unpack('>I', raw[:4])[0]
+            raw = raw[4:]
+            num_ls -= 1
+            self.leases.append(datatypes.lease(ri_hash=ri, tid=tid))
+    
 class RequestLSMessage(Message):
-
-    _log = logging.getLogger(__name__)
-
+    
     def __init__(self, raw):
         Message.__init__(self, raw=raw)
         raw = self.body
