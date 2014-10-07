@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 from builtins import *
+from future.utils import native
 import base64
 import struct
 import zlib
@@ -9,6 +10,11 @@ NO_SESSION_ID = 65535
 PROTOCOL_VERSION = b'\x2a'
 _desthash_valid = '1234567890qwertyuiopasdfghjklzxcvbnm'
 
+def struct_pack(fmt, *args):
+    return struct.pack(native(fmt), *args)
+
+def struct_unpack(fmt, *args):
+    return struct.unpack(native(fmt), *args)
 
 def get_as_int(data):
     if isinstance(data, int):
@@ -19,7 +25,7 @@ def get_as_int(data):
 def timeout(sec):
     sec *= 1000
     ms = int(sec)
-    return struct.pack('>I', ms)
+    return struct_pack('>I', ms)
 
 def isdesthash(name):
     if isinstance(name, bytes):

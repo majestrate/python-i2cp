@@ -21,8 +21,8 @@ if os.path.exists(install_requires_fname):
 # This will not work on Py3 if any of the 14 standard library modules listed
 # here get used later on:
 # http://python-future.org/standard_library_imports.html#list-standard-library-refactored
-if sys.version_info[0] < 3:
-    install_requires.append('future>=0.14.0')
+#if sys.version_info[0] < 3:
+#    install_requires.append('future>=0.14.0')
 
 version = '0.0.2'
 
