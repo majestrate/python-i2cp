@@ -31,14 +31,14 @@ class TestUtil(TestCase):
 
     def test_assert_portnum_neg(self):
         assert not util.check_portnum(-1)
-        
+
     def test_assert_portnum_bad_types(self):
-        assert not util.check_portnum('')        
+        assert not util.check_portnum('')
         assert not util.check_portnum(b'')
         assert not util.check_portnum(bytearray())
         assert not util.check_portnum(0.0)
         assert not util.check_portnum(None)
-        
+
     def test_isdesthash(self):
         assert not util.isdesthash(self.desthash_short)
         assert not util.isdesthash(self.desthash_invalid_bytes)

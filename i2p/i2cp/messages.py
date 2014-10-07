@@ -4,9 +4,9 @@ import logging
 import random
 import struct
 from enum import Enum
-from . import util 
-from . import datatypes 
-from . import exceptions 
+from . import util
+from . import datatypes
+from . import exceptions
 from . import crypto
 
 class message_type(Enum):
