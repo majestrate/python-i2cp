@@ -213,10 +213,8 @@ class Connection(object):
         self._send_dgram(datatypes.dsa_datagram, dest, data, srcport, dstport)
 
     def _send_dgram(self, dgram_class, dest, data, srcport=0, dstport=0):
-        if not isinstance(data, bytes) and util.py3k:
+        if isinstance(data, str):
             data = bytes(data, 'utf-8')
-        elif not util.py3k and not isinstance(data, str):
-            data = bytes(str(data), 'utf-8')
         def runit(_dest):
             if _dest is None:
                 self._log.warn('no such host: %s' % dest)

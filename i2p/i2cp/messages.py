@@ -128,10 +128,7 @@ class HostLookupMessage(Message):
             name = datatypes.i2p_string.create(name)
             self._log.debug(name)
             body += util.struct_pack('>B', self.req_type)
-            if util.py3k:
-                body += name
-            else:
-                body += bytearray(name, 'utf-8')
+            body += name
             Message.__init__(self, type=message_type.HostLookup, body=body)
 
 

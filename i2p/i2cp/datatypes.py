@@ -199,11 +199,11 @@ class i2p_string(object):
 
     @staticmethod
     def create(data):
-        dlen = len(data)
-        if util.py3k and not isinstance(data, bytes):
+        if isinstance(data, str):
             data = bytes(data, 'utf-8')
+        dlen = len(data)
         return util.struct_pack('>B', dlen) + data
-    
+
 
 class lease(object):
 
@@ -337,11 +337,10 @@ class dsa_datagram(datagram):
             payload_hash = crypto.sha256(self.payload)
             self.sig = self.dest.sign(payload_hash)
             self._log.debug('signature=%s' % [ self.sig])
-            if util.py3k:
-                payload = self.payload
-            else:
-                payload = bytearray(self.payload, 'utf-8')
-            self.data += self.sig + payload
+            self.data += self.sig
+            if isinstance(payload, str):
+                payload = bytes(payload, 'utf-8')
+            self.data += payload
 
     def serialize(self):
         return self.data

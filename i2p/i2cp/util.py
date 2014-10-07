@@ -5,8 +5,6 @@ import struct
 import zlib
 import sys
 
-py3k = sys.version[0] == '3'
-
 # Py2 struct.pack() must take a native string as its format argument
 # http://python-future.org/stdlib_incompatibilities.html#struct-pack
 if sys.version_info[0] < 3:
