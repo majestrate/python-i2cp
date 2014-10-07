@@ -1,5 +1,5 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
-from future.builtins import int, bytes
+from builtins import *
 from . import util
 from . import crypto
 from enum import Enum

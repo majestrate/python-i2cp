@@ -1,5 +1,5 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
-from future.builtins import str, int
+from builtins import *
 import io
 import logging
 import random
