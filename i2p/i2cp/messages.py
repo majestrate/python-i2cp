@@ -1,5 +1,4 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
-from future.utils import native
 from builtins import *
 import io
 import logging
@@ -96,11 +95,10 @@ class GetDateMessage(Message):
             raise NotImplemented()
         else:
             body = bytes()
-            version = str(version)
             version = datatypes.i2p_string.create(version)
             self._log.debug(version)
-            body = native(body) + native(version)
-            body = native(body) + native(datatypes.mapping(opts=opts).serialize())
+            body += version
+            body += datatypes.mapping(opts=opts).serialize()
             Message.__init__(self, type=message_type.GetDate, body=body)
 
 class HostLookupMessage(Message):
@@ -182,10 +180,10 @@ class CreateSessionMessage(Message):
         return '[CreateSession opts=%s]' % self.opts
 
 class RequestVarLSMessage(Message):
-    
+
     def __init__(self, raw):
         Message.__init__(self, raw=raw)
-        raw = self.body 
+        raw = self.body
         self.sid = util.struct_unpack('>H', raw[:2])
         num_ls = util.get_as_int(raw[2])
         self.leases = []
@@ -196,9 +194,9 @@ class RequestVarLSMessage(Message):
             raw = raw[4:]
             num_ls -= 1
             self.leases.append(datatypes.lease(ri_hash=ri, tid=tid))
-    
+
 class RequestLSMessage(Message):
-    
+
     def __init__(self, raw):
         Message.__init__(self, raw=raw)
         raw = self.body
