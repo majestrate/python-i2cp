@@ -200,8 +200,8 @@ class i2p_string(object):
 
     @staticmethod
     def create(data):
-        if isinstance(data, str):
-            data = bytes(data, 'utf-8')
+        if not isinstance(data, bytes):
+            data = bytearray(data, 'utf-8')
         dlen = len(data)
         return struct.pack(b'>B', dlen) + data
 

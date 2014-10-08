@@ -107,16 +107,16 @@ class Connection(object):
 
     def _handle_request_vls(self, raw):
         msg = messages.RequestVarLSMessage(raw=raw)
-        for l in msg.leases:
-            enckey = crypto.ElGamalGenerate()
-            sigkey = crypto.DSAGenerate()
-            ls = datatypes.leaseset(leases=[l],dest=self.dest, ls_enckey=enckey, ls_sigkey=sigkey)
-            msg = messages.CreateLSMessage(
-                sid=self._sid,
-                sigkey=sigkey,
-                enckey=enckey,
-                leaseset=ls)
-            self._send_msg(msg)
+
+        enckey = crypto.ElGamalGenerate()
+        sigkey = crypto.DSAGenerate()
+        ls = datatypes.leaseset(leases=msg.leases, dest=self.dest, ls_enckey=enckey, ls_sigkey=sigkey)
+        msg = messages.CreateLSMessage(
+            sid=self._sid,
+            sigkey=sigkey,
+            enckey=enckey,
+            leaseset=ls)
+        self._send_msg(msg)
 
     def _flush_sendq(self):
         while not self._sendq.empty():
@@ -212,7 +212,7 @@ class Connection(object):
         self._send_dgram(datatypes.dsa_datagram, dest, data, srcport, dstport)
 
     def _send_dgram(self, dgram_class, dest, data, srcport=0, dstport=0):
-        if isinstance(data, str):
+        if not isinstance(data, bytes):
             data = bytes(data, 'utf-8')
         def runit(_dest):
             if _dest is None:
