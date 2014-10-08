@@ -3,26 +3,11 @@ from builtins import *
 import base64
 import struct
 import zlib
-import sys
-
-# Py2 struct.pack() must take a native string as its format argument
-# http://python-future.org/stdlib_incompatibilities.html#struct-pack
-if sys.version_info[0] < 3:
-    from future.utils import native as native_str
-else:
-    # No-op wrapper
-    native_str = str
 
 BUFFER_SIZE = 1024
 NO_SESSION_ID = 65535
 PROTOCOL_VERSION = b'\x2a'
 _desthash_valid = '1234567890qwertyuiopasdfghjklzxcvbnm'
-
-def struct_pack(fmt, *args):
-    return struct.pack(native_str(fmt), *args)
-
-def struct_unpack(fmt, *args):
-    return struct.unpack(native_str(fmt), *args)
 
 def get_as_int(data):
     if isinstance(data, int):

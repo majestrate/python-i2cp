@@ -50,7 +50,7 @@ class Message(object):
 
         """
         raw = fd.read(5)
-        _len, _type = util.struct_unpack('>IB', raw)
+        _len, _type = struct.unpack(b'>IB', raw)
         _data = bytes(fd.read(_len))
         try:
             if parts:
@@ -73,7 +73,7 @@ class Message(object):
         """
         serialize to bytearray
         """
-        hdr = util.struct_pack('>IB', len(self.body), self.type.value)
+        hdr = struct.pack(b'>IB', len(self.body), self.type.value)
         return hdr + self.body
 
     def __str__(self):
@@ -120,14 +120,14 @@ class HostLookupMessage(Message):
             self.sid = sid or util.NO_SESSION_ID
             self.rid = rid or random.randint(1, 2 ** 16)
             body = bytes()
-            body += util.struct_pack('>H', self.sid)
-            body += util.struct_pack('>I', self.rid)
-            body += util.struct_pack('>I', self.timeout)
+            body += struct.pack(b'>H', self.sid)
+            body += struct.pack(b'>I', self.rid)
+            body += struct.pack(b'>I', self.timeout)
             self.req_type = 1
             self._log.debug(name)
             name = datatypes.i2p_string.create(name)
             self._log.debug(name)
-            body += util.struct_pack('>B', self.req_type)
+            body += struct.pack(b'>B', self.req_type)
             body += name
             Message.__init__(self, type=message_type.HostLookup, body=body)
 
@@ -141,8 +141,8 @@ class HostLookupReplyMessage(Message):
     def __init__(self, name=None, sid=None, raw=None):
         if raw:
             Message.__init__(self, raw=raw)
-            self.sid = util.struct_unpack('>H', self.body[:2])[0]
-            self.rid = util.struct_unpack('>I', self.body[2:6])[0]
+            self.sid = struct.unpack(b'>H', self.body[:2])[0]
+            self.rid = struct.unpack(b'>I', self.body[2:6])[0]
             self.code = util.get_as_int(self.body[6])
             self.dest = None
             if self.code == 0:
@@ -181,13 +181,13 @@ class RequestVarLSMessage(Message):
     def __init__(self, raw):
         Message.__init__(self, raw=raw)
         raw = self.body
-        self.sid = util.struct_unpack('>H', raw[:2])
+        self.sid = struct.unpack(b'>H', raw[:2])
         num_ls = util.get_as_int(raw[2])
         self.leases = []
         while num_ls > 0:
             ri = raw[:32]
             raw = raw[32:]
-            tid = util.struct_unpack('>I', raw[:4])[0]
+            tid = struct.unpack(b'>I', raw[:4])[0]
             raw = raw[4:]
             num_ls -= 1
             self.leases.append(datatypes.lease(ri_hash=ri, tid=tid))
@@ -198,14 +198,14 @@ class RequestLSMessage(Message):
         Message.__init__(self, raw=raw)
         raw = self.body
         self.leases = []
-        self.sid = util.struct_unpack('>H',raw[:2])
+        self.sid = struct.unpack(b'>H',raw[:2])
         numtun = util.get_as_int(raw[2])
         self._log.debug('got %d leases' % numtun)
         raw = raw[3:]
         while numtun > 0:
             ri = raw[:32]
             raw = raw[32:]
-            tid = util.struct_unpack('>I', raw[:4])[0]
+            tid = struct.unpack(b'>I', raw[:4])[0]
             raw = raw[4:]
             numtun -= 1
             self.leases.append(datatypes.lease(ri_hash=ri, tid=tid))
@@ -227,7 +227,7 @@ class CreateLSMessage(Message):
             raise NotImplemented()
         else:
             body = bytearray()
-            body += util.struct_pack('>H', sid)
+            body += struct.pack(b'>H', sid)
             body += crypto.dsa_private_key_to_bytes(sigkey)
             body += crypto.elgamal_private_key_to_bytes(enckey)
             body += leaseset.serialize()
@@ -271,7 +271,7 @@ class SessionStatusMessage(Message):
     def __init__(self, raw):
         Message.__init__(self, raw=raw)
         self._log.debug('body_len=%d' %len(self.body))
-        self.sid = util.struct_unpack('>H', self.body[:2])[0]
+        self.sid = struct.unpack(b'>H', self.body[:2])[0]
         self._log.debug('sid=%d' % self.sid)
         status = util.get_as_int(self.body[2])
         self.status = session_status(status)
@@ -287,8 +287,8 @@ class MessagePayloadMessage(Message):
     def __init__(self, raw):
         Message.__init__(self,raw=raw)
         data = self.body
-        self.sid = util.struct_unpack('>H', data[:2])[0]
-        self.mid = util.struct_unpack('>I', data[2:6])[0]
+        self.sid = struct.unpack(b'>H', data[:2])[0]
+        self.mid = struct.unpack(b'>I', data[2:6])[0]
         self.payload = datatypes.i2cp_payload(raw=data[6:])
 
     def __str__(self):
@@ -300,10 +300,10 @@ class SendMessageMessage(Message):
         if nonce is None:
             nonce = 0
         body = bytes()
-        body += util.struct_pack('>H', sid)
+        body += struct.pack(b'>H', sid)
         body += dest.serialize()
         body += payload
-        body += util.struct_pack('>I', nonce)
+        body += struct.pack(b'>I', nonce)
         Message.__init__(self, type=message_type.SendMessage, body=body)
         self.sid = sid
         self.dest = dest
@@ -346,11 +346,11 @@ class MessageStatusMessage(Message):
         if raw:
             Message.__init__(self,raw=raw)
             raw = self.body
-            self.sid = util.struct_unpack('>H', raw[:2])[0]
-            self.mid = util.struct_unpack('>I', raw[2:6])[0]
+            self.sid = struct.unpack(b'>H', raw[:2])[0]
+            self.mid = struct.unpack(b'>I', raw[2:6])[0]
             self.status = message_status(util.get_as_int(raw[7]))
-            self.size = util.struct_unpack('>I', raw[7:11])[0]
-            self.nonce = util.struct_unpack('>I', raw[11:15])[0]
+            self.size = struct.unpack(b'>I', raw[7:11])[0]
+            self.nonce = struct.unpack(b'>I', raw[11:15])[0]
         else:
             raise NotImplemented()
 

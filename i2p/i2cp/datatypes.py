@@ -4,6 +4,7 @@ from . import util
 from . import crypto
 from enum import Enum
 import logging
+import struct
 import time
 
 
@@ -39,8 +40,8 @@ class certificate(object):
 
     def serialize(self, b64=False):
         data = bytearray()
-        data += util.struct_pack('>B', self.type.value)
-        data += util.struct_pack('>H', len(self.data))
+        data += struct.pack(b'>B', self.type.value)
+        data += struct.pack(b'>H', len(self.data))
         data += self.data
         if b64:
             data = util.i2p_b64encode(data)
@@ -110,7 +111,7 @@ class destination(object):
         if b64:
             data = util.i2p_b64decode(data)
         ctype = certificate_type(util.get_as_int(data[384]))
-        clen = util.struct_unpack('>H', data[385:387])[0]
+        clen = struct.unpack(b'>H', data[385:387])[0]
         cert = certificate(ctype, data[387:387+clen])
         if cert.type == certificate_type.NULL:
             return crypto.ElGamalPublicKey(data[:256]), crypto.DSAPublicKey(data[256:384]), cert, None
@@ -202,7 +203,7 @@ class i2p_string(object):
         if isinstance(data, str):
             data = bytes(data, 'utf-8')
         dlen = len(data)
-        return util.struct_pack('>B', dlen) + data
+        return struct.pack(b'>B', dlen) + data
 
 
 class lease(object):
@@ -216,7 +217,7 @@ class lease(object):
         self._log.debug('ri_hash %d bytes'%len(ri_hash))
         assert len(ri_hash) == 32
         self.data += ri_hash
-        self.data += util.struct_pack('>I', tid)
+        self.data += struct.pack(b'>I', tid)
         self.data += date()
         self._log.debug('lease is %d bytes' % len(self.data))
         assert len(self.data) == 44
@@ -241,7 +242,7 @@ class mapping(object):
         if raw:
             self.data = raw
             self.opts = {}
-            dlen = util.struct_unpack('>H', raw[:2])
+            dlen = struct.unpack(b'>H', raw[:2])
             data = raw[2:2+dlen]
             while dlen > 0:
                 key = i2p_string.parse(data)
@@ -263,7 +264,7 @@ class mapping(object):
                 data += bytes(';', 'utf-8')
             dlen = len(data)
             self._log.debug('len of mapping is %d bytes' % dlen)
-            dlen = util.struct_pack('>H', dlen)
+            dlen = struct.pack(b'>H', dlen)
             self.data = dlen + data
 
     def serialize(self):
@@ -274,11 +275,11 @@ class mapping(object):
 
 def date(num=None):
     if isinstance(num, bytes):
-        num = util.struct_unpack('>Q', num)[0]
+        num = struct.unpack(b'>Q', num)[0]
     if num is None:
         num = time.time() * 1000
     num = int(num)
-    return util.struct_pack('>Q', num)
+    return struct.pack(b'>Q', num)
 
 class i2cp_protocol(Enum):
 
@@ -357,14 +358,14 @@ class i2cp_payload(object):
 
     def __init__(self, raw=None, data=None, srcport=0, dstport=0, proto=i2cp_protocol.RAW):
         if raw:
-            self.dlen = util.struct_unpack('>I', raw[:4])[0]
+            self.dlen = struct.unpack(b'>I', raw[:4])[0]
             self._log.debug('payload len=%d' %self.dlen)
             data = raw[4:self.dlen]
             self._log.debug('compressed payload len=%d' %len(data))
             assert data[:3] == self.gz_header
             self.flags = data[3]
-            self.srcport = util.struct_unpack('>H', data[4:6])[0]
-            self.dstport = util.struct_unpack('>H', data[6:8])[0]
+            self.srcport = struct.unpack(b'>H', data[4:6])[0]
+            self.dstport = struct.unpack(b'>H', data[6:8])[0]
             self.xflags = data[8]
             self.proto = i2cp_protocol(util.get_as_int(data[9]))
             self.data = util.i2p_decompress(data[10:])
@@ -385,15 +386,15 @@ class i2cp_payload(object):
     def serialize(self):
         data = bytearray()
         data += self.gz_header
-        data += util.struct_pack('>B', self.flags)
-        data += util.struct_pack('>H', self.srcport)
-        data += util.struct_pack('>H', self.dstport)
-        data += util.struct_pack('>B', self.xflags)
-        data += util.struct_pack('>B', self.proto.value)
+        data += struct.pack(b'>B', self.flags)
+        data += struct.pack(b'>H', self.srcport)
+        data += struct.pack(b'>H', self.dstport)
+        data += struct.pack(b'>B', self.xflags)
+        data += struct.pack(b'>B', self.proto.value)
         data += self.data
         dlen = len(data)
         self._log.debug('serialize len=%d' % dlen)
-        return util.struct_pack('>I', dlen) + data
+        return struct.pack(b'>I', dlen) + data
 
 
     def __str__(self):
