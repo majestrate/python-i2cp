@@ -179,7 +179,7 @@ class Connection(object):
                 self._sid = msg.sid
                 Thread(target=self.handler.session_made, args=(self,)).start()
         if msg.type == messages.message_type.SetDate and self._sid is None:
-            msg = messages.CreateSessionMessage(dest=self.dest, opts=self.opts, date=datatypes.date())
+            msg = messages.CreateSessionMessage(dest=self.dest, opts=self.opts, session_date=datatypes.date())
             self._send_msg(msg)
 
     def _host_not_found(self, rid):

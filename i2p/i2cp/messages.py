@@ -156,19 +156,19 @@ class HostLookupReplyMessage(Message):
 
 class CreateSessionMessage(Message):
 
-    def __init__(self, opts=None, date=None, dest=None, raw=None):
+    def __init__(self, opts=None, session_date=None, dest=None, raw=None):
         if raw:
             Message.__init__(self, raw)
         else:
             self.opts = opts
-            data = bytearray()
+            data = bytes()
             _dest = dest.serialize()
             self._log.debug('dest len: %d' % len(_dest))
             opts = datatypes.mapping(self.opts).serialize()
             self._log.debug('opts: %s' % opts)
             data += _dest
             data += opts
-            data += date
+            data += session_date
             data += dest.dsa_sign(data)
             type = message_type.CreateSession
             Message.__init__(self, type, data)
