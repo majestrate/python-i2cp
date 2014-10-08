@@ -107,17 +107,16 @@ class Connection(object):
 
     def _handle_request_vls(self, raw):
         msg = messages.RequestVarLSMessage(raw=raw)
-        l = msg.leases[0]
-        enckey = crypto.ElGamalGenerate()
-        sigkey = crypto.DSAGenerate()
-        ls = datatypes.leaseset(leases=[l],dest=self.dest, ls_enckey=enckey, ls_sigkey=sigkey)
-        msg = messages.CreateLSMessage(
-            sid=self._sid,
-            sigkey=sigkey,
-            enckey=enckey,
-            leaseset=ls)
-        self._log.debug(msg)
-        self._send_msg(msg)
+        for l in msg.leases:
+            enckey = crypto.ElGamalGenerate()
+            sigkey = crypto.DSAGenerate()
+            ls = datatypes.leaseset(leases=[l],dest=self.dest, ls_enckey=enckey, ls_sigkey=sigkey)
+            msg = messages.CreateLSMessage(
+                sid=self._sid,
+                sigkey=sigkey,
+                enckey=enckey,
+                leaseset=ls)
+            self._send_msg(msg)
 
     def _flush_sendq(self):
         while not self._sendq.empty():
