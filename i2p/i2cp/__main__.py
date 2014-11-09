@@ -55,8 +55,8 @@ def main():
     dest = args.dest
     dgram = args.dgram
     opts = {
-        'inbound.quantity' : '16',
-        'outbound.quantity' : '16',
+        'inbound.quantity' : '3',
+        'outbound.quantity' : '3',
         'i2cp.fastReceive':'true'
     }
     handler = Handler(dest, dgram)
