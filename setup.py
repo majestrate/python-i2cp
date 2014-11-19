@@ -49,5 +49,5 @@ setup(
     license='Public Domain',
     version=version,
     install_requires=install_requires,
-    packages=['i2p', 'i2p.i2cp', 'i2p.i2cp.test'],
+    packages=['i2p', 'i2p.i2cp', 'i2p.i2cp.test', 'i2p.socket'],
 )

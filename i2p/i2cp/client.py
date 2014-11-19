@@ -12,11 +12,18 @@ from . import datatypes
 from . import util
 from . import crypto
 
+from i2p.socket import streaming
+
 class I2CPHandler(object):
 
     def got_dgram(self, dest, data, srcport, dstport):
         """
         called every time we get a valid datagram
+        """
+
+    def got_packet(self, pkt, srcport, dstport):
+        """
+        called every time we get a valid streaming packet
         """
 
     def session_made(self, conn):
@@ -200,10 +207,13 @@ class Connection(object):
         elif payload.proto == datatypes.i2cp_protocol.RAW:
             self._log.debug('dgram-raw paylod=%s' % [ payload.data ])
             self.handler.got_dgram(None, payload.data, payload.srcport, payload.dstport)
-        else:
+        elif payload.proto == datatypes.i2cp_proocol.STREAMING:
             self._log.debug('streaming payload=%s' % [ payload.data ] )
-            self.handler.got_dgram(None, payload.data, payload.srcport, payload.dstport)
+            pkt = streaming.packet(raw=payload.data)
+            self.handler.got_packet(pkt, payload.srcport, payload.dstport)
 
+    def send_packet(self, dest, packet, srcport=0, dstport=0):
+        self._send_dgram(None, packet.serialize(), srcport, dstport, datatypes.i2cp_protocol.STREAMING)
 
     def send_raw_dgram(self, dest, data, srcport=0, dstport=0):
         self._send_dgram(datatypes.raw_datagram, dest, data, srcport, dstport)
@@ -211,7 +221,7 @@ class Connection(object):
     def send_dsa_dgram(self, dest, data, srcport=0, dstport=0):
         self._send_dgram(datatypes.dsa_datagram, dest, data, srcport, dstport)
 
-    def _send_dgram(self, dgram_class, dest, data, srcport=0, dstport=0):
+    def _send_dgram(self, dgram_class, dest, data, srcport=0, dstport=0, protocol=None):
         if not isinstance(data, bytes):
             data = bytes(data, 'utf-8')
         def runit(_dest):
@@ -219,9 +229,12 @@ class Connection(object):
                 self._log.warn('no such host: %s' % dest)
                 return
             self._log.info('send %d bytes to %s'%(len(data), _dest.base32()))
-            dgram = dgram_class(dest=self.dest, payload=data).serialize()
-            self._log.debug('dgram=%s' % [dgram])
-            p = datatypes.i2cp_payload(proto=dgram_class.protocol ,srcport=srcport,dstport=dstport, data=dgram)
+            if dgram_class is None:
+                p = datatypes.i2cp_payload(proto=protocol, srcport=srcport, dstport=dstport, data=data)
+            else:
+                dgram = dgram_class(dest=self.dest, payload=data).serialize()
+                self._log.debug('dgram=%s' % [dgram])
+                p = datatypes.i2cp_payload(proto=dgram_class.protocol ,srcport=srcport,dstport=dstport, data=dgram)
             self._log.debug('payload=%s' % [p])
             msg = messages.SendMessageMessage(sid=self._sid, dest=_dest, payload=p.serialize())
             self._send_msg(msg)

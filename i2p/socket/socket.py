@@ -1,70 +1,66 @@
-import i2p.i2cp.client as i2cp
-from i2p.i2cp.crypto import *
-from i2p.i2cp.datatypes import *
-from i2p.i2cp.exceptions import *
-from i2p.i2cp.util import *
-from i2p.socket.streaming import *
+from i2p.i2cp import client
+from i2p.i2cp import crypto 
+from i2p.i2cp import datatypes 
+from i2p.i2cp import exceptions  
+from i2p.i2cp import util 
+from i2p.socket import streaming 
 
 import logging
 import queue
 
 
+class _i2p_base_socket(client.I2CPHandler):
 
-class _i2p_socket(i2cp.I2CPHandler):
-    """
-    socket like object for 1 destination
-    utilizes 1 i2cp connection
-    """
-
-    def __init__(self, i2cp_host, i2cp_port, session_opts):
+    def __init__(self, i2cp_host, i2cp_port, keyfile, session_opts):
+        """
+        base socket object
+        provides reliable streaming over i2p
+        """
         self._log = logging.getLogger(self.__class__.__name__)
         self._i2cp_host , self._i2cp_port = i2cp_host, i2cp_port
-        self._i2cp = None
         self._dest = None
         self._port = None
-        self._keyfd = None
-        self._handler = socket_handler(self)
+        self._keyfile = keyfile or util.tmpkeyfile()
+        self._keyfd = open(self._keyfile, 'rb')
         self._session_opts = dict(session_opts)
+        self.i2cp = client.Connection(self, keyfile=self._keyfile, i2cp_host=self._i2cp_host, i2cp_port=self._i2cp_port)
 
+        
     def __del__(self):
         # explicitly close tempkey fd
         if self._keyfd is not None:
             self._keyfd.close()
 
-        
-    def _proto(self):
-        return self._handler.protocol
+
+class _i2p_server_socket(_i2p_base_socket):
+    """
+    server socket
+    accepts incoming connections
+    """
+
 
     def _port_okay(self, dstport):
         return self._port is not None and dstport == self._port or True
 
-    def got_dgram(self, dest, data, srcport, dstport):
-        if self._port_okay(dstport):
-            msg = self._handler.create_message(data)
-            if msg is not None:
-                msg.srcport = srcport
-                msg.dstport = dstport
-                self._handler.new_incoming(msg)
-            else:
-                self._log.error('malformed message')
-        else:
-            self._log.info('dropping packet with dstport=%d' % dstport)
-
+    def got_packet(self, pkt, srcport, dstport):
+        """
+        handle incoming packet
+        """
+        
+        
     def _flush_send(self):
         """
         flush send queue
         """
         while True:
-            msg = self._handler.poll_outgoing()
-            if msg is None:
+            pkt = self._handler.poll_outgoing()
+            if pkt is None:
                 break
-            self._send_msg(msg)
+            self._send_pkt(msg)
 
-    def _send_msg(self, msg):
-        self._i2cp.send_message(msg.dest, msg.serialize(), 
-                            msg.srcport, msg.dstport,
-                            msg.message_class, msg.opts)
-
+    def _send_pkt(self, msg):
+        self.i2cp.send_packet(msg.dest, msg.packet)
+        
 
     def session_made(self, conn):
         """
@@ -86,7 +82,18 @@ class _i2p_socket(i2cp.I2CPHandler):
         """
         self.close()
 
+    def start(self):
+        """
+        start i2cp session
+        """
+        self.i2cp.open()
+        self.i2cp.start()
 
+
+class _i2p_socket(object):
+
+    def __init__(self, factory):
+        self._factory = factory
 
     def connect(self, addr, keyfile=None):
         """
@@ -96,18 +103,12 @@ class _i2p_socket(i2cp.I2CPHandler):
             raise I2CPException('socket already in use')
             
         if keyfile is None:
-            self._keyfd, keyfile = tmpkeyfile()
+            self._keyfd, keyfile = 
 
-        self._i2cp = i2cp.Connection(self, keyfile=keyfile, i2cp_host='127.0.0.1', i2cp_port=7654, curve25519=False)
+        self._i2cp = i2cp.Connection(self, keyfile=keyfile, i2cp_host='127.0.0.1', i2cp_port=7654)
         self._start_i2cp()
 
 
-    def _start_i2cp(self):
-        """
-        start i2cp session
-        """
-        self._i2cp.open()
-        self._i2cp.start()
 
     def bind(self, addr):
         """
@@ -120,7 +121,7 @@ class _i2p_socket(i2cp.I2CPHandler):
             raise I2CPException('bind() requires a tuple (keyfile, portno)')
         keyfile = addr[0]
         self._port = addr[1]
-        self._i2cp = i2cp.Connection(self, keyfile=keyfile, i2cp_host=self._i2cp_host, i2cp_port=self._i2cp_port, curve25519=False)
+        self._i2cp = i2cp.Connection)
         self._start_i2cp()
         
 
@@ -149,4 +150,6 @@ def socket(name=None, type=None, i2cp_host='127.0.0.1', i2cp_port=7654, **kwargs
     :param kwargs: i2cp session options
     :return: a socket like object that goes over i2p
     """
-    return _i2p_socket(i2cp_host, i2cp_port, kwargs)
+    
+    sock = _i2p_socket(i2cp_host, i2cp_port, kwargs)
+    return sock
