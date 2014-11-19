@@ -10,6 +10,8 @@ from . import datatypes
 from . import exceptions
 from . import crypto
 
+from trollius import From, Return
+
 class message_type(Enum):
     CreateSession = 1
     ReconfigSession = 2
@@ -44,10 +46,11 @@ class Message(object):
 
     _log = logging.getLogger('I2CP-Message')
 
+        
     @staticmethod
     def parse(fd, parts=True):
         """
-
+        read a message from a file descriptor
         """
         raw = fd.read(5)
         _len, _type = struct.unpack(b'>IB', raw)
@@ -147,6 +150,7 @@ class HostLookupReplyMessage(Message):
             self.dest = None
             if self.code == 0:
                 self.dest = datatypes.destination(raw=self.body[7:],b64=False)
+            
         else:
             raise NotImplemented()
 
@@ -361,3 +365,24 @@ class MessageStatusMessage(Message):
             self.status,
             self.size,
             self.nonce)
+
+
+class SetDateMessage(Message):
+    pass
+
+
+messages = {
+    message_type.CreateSession : CreateSessionMessage,
+    message_type.CreateLS : CreateLSMessage,
+    message_type.SendMessage : SendMessageMessage,
+    message_type.SessionStatus : SessionStatusMessage,
+    message_type.RequestLS : RequestLSMessage,
+    message_type.MessageStatus : MessageStatusMessage,
+    message_type.Disconnect : DisconnectMessage,
+    message_type.MessagePayload : MessagePayloadMessage,
+    message_type.GetDate : GetDateMessage,
+    message_type.SetDate : SetDateMessage,
+    message_type.RequestVarLS : RequestVarLSMessage,
+    message_type.HostLookup : HostLookupMessage,
+    message_type.HostLookupReply : HostLookupReplyMessage,
+}

@@ -339,8 +339,6 @@ class dsa_datagram(datagram):
             self.sig = self.dest.sign(payload_hash)
             self._log.debug('signature=%s' % [ self.sig])
             self.data += self.sig
-            if isinstance(payload, str):
-                payload = bytes(payload, 'utf-8')
             self.data += payload
 
     def serialize(self):

@@ -10,7 +10,7 @@ tcp over i2p main tester
 
 
 
-def main();
+def main():
     """
     main driver
     """

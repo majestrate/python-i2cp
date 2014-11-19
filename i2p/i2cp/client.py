@@ -4,7 +4,7 @@ import logging
 import os
 import queue
 import socket
-from threading import Thread
+import struct
 import time
 from . import exceptions
 from . import messages
@@ -12,95 +12,249 @@ from . import datatypes
 from . import util
 from . import crypto
 
+import trollius as asyncio
+from trollius import From, Return
+
 from i2p.socket import streaming
 
 class I2CPHandler(object):
 
+    @asyncio.coroutine
     def got_dgram(self, dest, data, srcport, dstport):
         """
         called every time we get a valid datagram
         """
-
+        raise Return()
+        
+    @asyncio.coroutine
     def got_packet(self, pkt, srcport, dstport):
         """
         called every time we get a valid streaming packet
         """
+        raise Return()
 
+    @asyncio.coroutine
     def session_made(self, conn):
         """
         called after an i2cp session is made successfully with the i2p router
         :param conn: underlying connection
         """
-
+        raise Return()
+    
+    @asyncio.coroutine
     def session_refused(self):
         """
-        called if the i2p router refuses an i2cp session
+        called when the i2p router refuses a session
         """
-
+    
+    @asyncio.coroutine
     def disconnected(self, reason):
         """
         called if the i2cp session is disconnected abruptly
         """
-
-    def stopped(self):
-        """
-        session is done executing
-        """
-
+        raise Return()
+    
 class Connection(object):
-
-    def __init__(self, handler, session_options={}, keyfile='i2cp.key', i2cp_host='127.0.0.1', i2cp_port=7654, curve25519=False):
-        self._i2cp_addr = (i2cp_host, i2cp_port)
-        self._sock = socket.socket()
-        self._log = logging.getLogger('I2CP-Connection-%s-%d' % self._i2cp_addr)
+    
+    def __init__(self, handler, lookup=None, session_options={}, keyfile='i2cp.key', i2cp_host='127.0.0.1', i2cp_port=7654):
+        self._i2cp_host, self._i2cp_port = i2cp_host, i2cp_port
+        self._log = logging.getLogger('I2CP-Connection-%s-%d' % (i2cp_host, i2cp_port))
         self._sid = None
+        self._lookup = lookup
         self.dest = None
-        self._sfd = None
         self._connected = False
-        self._pending_name_lookups = {}
-        self._sendq = queue.Queue()
-        self.handler = handler
+        self.handler = handler or I2CPHandler()
         self.keyfile = keyfile
         self.opts = dict(session_options)
         self.opts['i2cp.fastReceive'] = 'true'
+        if self._lookup:
+            self.opts['i2cp.dontPublishLeaseSet'] = 'true'
         self.send_dgram = self.send_dsa_dgram
-        self._threads = list()
-
-    def is_open(self):
+        self._host_lookups = dict()
+        self._msg_handlers = {
+            messages.message_type.SessionStatus : self._msg_handle_session_status,
+            messages.message_type.RequestLS : self._msg_handle_request_ls,
+            messages.message_type.SetDate : self._msg_handle_set_date,
+            messages.message_type.Disconnect : self._msg_handle_disconnect,
+            messages.message_type.RequestVarLS : self._msg_handle_request_var_ls,
+            messages.message_type.HostLookupReply : self._msg_handle_host_lookup_reply,
+            messages.message_type.MessagePayload : self._msg_handle_message_payload,
+        }
+        self._dest_cache = dict()
+        
+    def is_connected(self):
         return self._connected
 
     def open(self):
+        """
+        open session to i2p router
+        """
         self._log.debug('connecting...')
-        self._sock.connect(self._i2cp_addr)
-        self._sfd = self._sock.makefile('rwb')
-        self._connected = True
-        self._send_raw(util.PROTOCOL_VERSION)
-
+        tsk = asyncio.async(asyncio.open_connection(self._i2cp_host, self._i2cp_port))
+        tsk.add_done_callback(self._cb_connected)
+        
     def generate_dest(self, keyfile):
         if not os.path.exists(keyfile):
             datatypes.destination.generate_dsa(keyfile)
         self.dest = datatypes.destination.load(keyfile)
+            
+    def lookup_async(self, name, hook):
+        """
+        lookup name asynchronously, call hook with result
+        """
+        self._log.info('async lookup {}'.format(name))
+        msg = messages.HostLookupMessage(name=name, sid=self._sid)
+        tsk = asyncio.async(self._send_msg(msg))
+        self._host_lookups[msg.rid] = tsk, name
+        self._log.debug('put rid {}'.format(msg.rid))
+        if hook is not None:
+            tsk.add_done_callback(hook)
 
-    def _recv_msg(self):
-        self._log.debug('recv...')
-        msg, raw = messages.Message.parse(self._sfd, parts=False)
-        self._log.debug('got message: %s' % [ msg ] )
-        return msg, raw
+    def _put_dest_cache(self, name, dest):
+        self._log.debug('put dest cache for {}'.format(name))
+        self._dest_cache[name] = dest
+        
 
-    def start(self):
-        if self.dest is None:
-            self.generate_dest(self.keyfile)
-        self._log.info('out dest is %s' % self.dest.base32())
-        msg = messages.GetDateMessage()
-        self._send_msg(msg)
-        self._threads.append(Thread(target=self._run_recv,args=()))
-        self._threads.append(Thread(target=self._run_send,args=()))
-        for t in self._threads:
-            t.start()
+    def _cb_recv_msg_hdr(self, ftr):
+        """
+        called when we read a message header
+        """
+        data = ftr.result()
+        if data is None:
+            self._recv_msg_hdr(None)
+        else:
+            _len, _type = struct.unpack(b'>IB', data)
+            _type = messages.message_type(_type)
+            asyncio.async(self._read_msg(_len, _type, data))
+        
+        
+    def _got_message(self, msgtype, msgbody, msgraw):
+        """
+        we got a message of tpye with body
+        """
+        if msgtype in self._msg_handlers:
+            handler_coro = self._msg_handlers[msgtype]
+            self._log.debug(handler_coro)
+            msg = messages.messages[msgtype](raw=msgraw)
+            tsk = asyncio.async(handler_coro(msg))
+            tsk.add_done_callback(self._recv_msg_hdr)
+        else:
+            self._log.warn('unhandled message of type: {}'.format(msgtype))
+            self._recv_msg_hdr(None)
+        
+    @asyncio.coroutine
+    def _read_msg(self, msglen, msgtype, msghdr):
+        """
+        read a message of a certain type
+        execute coroutine to handle message once read
+        """
+        self._log.debug('read_msg()')
+        self._log.info('recv %d bytes' % msglen)
+        if self._reader:
+            self._log.debug('read message of size {}'.format(msglen))
+            tsk = asyncio.async(self._reader.readexactly(msglen))
+            tsk.add_done_callback(lambda ftr : self._got_message(msgtype, ftr.result(), msghdr + ftr.result()))
+        raise Return()
+        
+    def _recv_msg_hdr(self, ftr):
+        """
+        read message header
+        """
+        if self._reader:
+            self._log.debug('recv header...')
+            tsk = asyncio.async(self._reader.readexactly(5))
+            tsk.add_done_callback(self._cb_recv_msg_hdr)
 
-    def _handle_request_ls(self, raw):
-        msg = messages.RequestLSMessage(raw=raw)
+    def _begin_session(self, ftr):
+        """
+        begin i2cp session after sending protocol byte
+        """
+        self._log.debug('begin_session()')
+        if self._lookup:
+            self._recv_msg_hdr(None)
+        else:
+            msg = messages.GetDateMessage()
+            tsk = asyncio.async(self._send_msg(msg))
+            tsk.add_done_callback(self._recv_msg_hdr)
+        
+            
+    def _cb_connected(self, ftr):
+        """
+        we connected, send protocol byte
+        """
+        self._reader, self._writer = ftr.result()
+        self._connected = None not in (self._reader, self._writer)
+        if self.is_connected():
+            if self._lookup is None:
+                self.generate_dest(self.keyfile)
+            self._log.info('connection established, out dest is %s' % self.dest.base32())
+            tsk = asyncio.async(self._send_raw(util.PROTOCOL_VERSION))
+            tsk.add_done_callback(self._begin_session)
+        else:
+            self._log.error('could not connect to i2p router')
+
+    @asyncio.coroutine
+    def _send_raw(self, data):
+        """
+        send raw bytes
+        """
+        self._log.info('send %d bytes' % len(data))
+        self._log.debug('--> {}'.format( [data]))
+        self._writer.write(data)
+        yield From(self._writer.drain())
+
+    
+    @asyncio.coroutine
+    def _send_msg(self, msg):
+        yield From(self._send_raw(msg.serialize()))
+        
+    @asyncio.coroutine
+    def _msg_handle_set_date(self, msg):
+        """
+        handle disconnect message
+        """
+        self._log.info('creating session...')
+        msg = messages.CreateSessionMessage(opts=self.opts, dest=self.dest, session_date=datatypes.date())
+        yield From(self._send_msg(msg))
+        
+    @asyncio.coroutine
+    def _msg_handle_disconnect(self, msg):
+        """
+        handle disconnect message
+        """
+        reason = msg.reason
+        self._log.warn('session disconnected from i2p router: {}'.format(reason))
+        tsk = asyncio.async(self.handler.disconnected(reason))
+        self.close()
+        raise Return()
+
+    @asyncio.coroutine
+    def _msg_handle_request_var_ls(self, msg):
+        """
+        handle variable lease set request message
+        """
+        self._log.debug('handle vls message')
+        #TODO: should we regen keys?
+        enckey = crypto.ElGamalGenerate()
+        sigkey = crypto.DSAGenerate()
+        ls = datatypes.leaseset(leases=msg.leases, dest=self.dest, ls_enckey=enckey, ls_sigkey=sigkey)
+        self._log.debug('made leaseset: {}'.format(ls))
+        msg = messages.CreateLSMessage(
+            sid=self._sid,
+            sigkey=sigkey,
+            enckey=enckey,
+            leaseset=ls)
+        self._log.debug('made message')
+        yield From(self._send_msg(msg))
+
+       
+    @asyncio.coroutine
+    def _msg_handle_request_ls(self, msg):
+        """
+        handle lease set request message
+        """
         l = msg.leases[0]
+        #TODO: should we regen keys?
         enckey = crypto.ElGamalGenerate()
         sigkey = crypto.DSAGenerate()
         ls = datatypes.leaseset(leases=[l],dest=self.dest, ls_enckey=enckey, ls_sigkey=sigkey)
@@ -109,190 +263,129 @@ class Connection(object):
             sigkey=sigkey,
             enckey=enckey,
             leaseset=ls)
-        self._log.debug(msg)
-        self._send_msg(msg)
+        yield From(self._send_msg(msg))
 
-    def _handle_request_vls(self, raw):
-        msg = messages.RequestVarLSMessage(raw=raw)
-
-        enckey = crypto.ElGamalGenerate()
-        sigkey = crypto.DSAGenerate()
-        ls = datatypes.leaseset(leases=msg.leases, dest=self.dest, ls_enckey=enckey, ls_sigkey=sigkey)
-        msg = messages.CreateLSMessage(
-            sid=self._sid,
-            sigkey=sigkey,
-            enckey=enckey,
-            leaseset=ls)
-        self._send_msg(msg)
-
-    def _flush_sendq(self):
-        while not self._sendq.empty():
-            msg = self._sendq.get_nowait()
-            if msg:
-                self._send_raw(msg.serialize())
-            else:
-                break
-
-    def _run_send(self):
-        while self._connected:
-            self._flush_sendq()
-            time.sleep(0.1)
-
-    def _run_recv(self):
-        while self._connected:
-            msg, raw = self._recv_msg()
-            self._handle_message(raw, msg)
-
-    def _handle_message(self, raw, msg):
-        if msg is None or msg.type is None:
-            self._log.warn('bad message')
-            return
-        self._log.info('client got %s message' % msg.type.name)
-        if msg.type == messages.message_type.Disconnect:
-            msg = messages.DisconnectMessage(raw=raw)
-            self._log.warn('disconnected: %s' % msg.reason)
-            self.handler.disconnected(msg.reason)
-            self.close()
-        if msg.type == messages.message_type.RequestVarLS:
-            self._handle_request_vls(raw)
-        if msg.type == messages.message_type.RequestLS:
-            self._handle_request_ls(raw)
-        if msg.type == messages.message_type.MessagePayload:
-            msg = messages.MessagePayloadMessage(raw=raw)
-            self._log.debug('handle_message: %s' % [msg])
-            self._handle_payload(msg.payload)
-        if msg.type == messages.message_type.HostLookupReply:
-            msg = messages.HostLookupReplyMessage(raw=raw)
-            dest = msg.dest
-            self._pending_name_lookups.pop(msg.rid)(dest)
-        if msg.type == messages.message_type.MessageStatus:
-            msg = messages.MessageStatusMessage(raw=raw)
-            self._log.debug('message status: %s' % msg.status)
-        if msg.type == messages.message_type.RequestLS:
-            self._handle_request_ls(raw)
-        if msg.type == messages.message_type.SessionStatus:
-            msg = messages.SessionStatusMessage(raw=raw)
-            self._log.debug('session status: %s' % [ msg ])
-            if msg.status == messages.session_status.REFUSED:
-                self._log.error('session rejected')
-                self.handler.session_failed(self)
-                self.close()
-            elif msg.status == messages.session_status.DESTROYED:
-                self._log.error('session destroyed')
-                self.handler.session_destroyed()
-                self.close()
-            elif msg.status == messages.session_status.CREATED:
-                self._log.info('session created')
-                self._sid = msg.sid
-                Thread(target=self.handler.session_made, args=(self,)).start()
-        if msg.type == messages.message_type.SetDate and self._sid is None:
-            msg = messages.CreateSessionMessage(dest=self.dest, opts=self.opts, session_date=datatypes.date())
-            self._send_msg(msg)
-
-    def _host_not_found(self, rid):
-        if rid in self._pending_name_lookups:
-            self._pending_name_lookups.pop(rid)(None)
-
-
-    def _async_lookup(self, name, hook):
-        msg = messages.HostLookupMessage(name=name, sid=self._sid)
-        self._pending_name_lookups[msg.rid] = hook
-        self._send_msg(msg)
-
-    def _handle_payload(self, payload):
+    
+    @asyncio.coroutine
+    def _msg_handle_message_payload(self, msg):
+        """
+        handle message payload message
+        """
+        payload = msg.payload
         if payload.proto == datatypes.i2cp_protocol.DGRAM:
             self._log.debug('dgram payload=%s' % [ payload.data ])
             dgram = datatypes.dsa_datagram(raw=payload.data)
-            self.handler.got_dgram(dgram.dest, dgram.payload, payload.srcport, payload.dstport)
+            yield From(self.handler.got_dgram(dgram.dest, dgram.payload, payload.srcport, payload.dstport))
         elif payload.proto == datatypes.i2cp_protocol.RAW:
             self._log.debug('dgram-raw paylod=%s' % [ payload.data ])
-            self.handler.got_dgram(None, payload.data, payload.srcport, payload.dstport)
+            yield From(self.handler.got_dgram(None, payload.data, payload.srcport, payload.dstport))
         elif payload.proto == datatypes.i2cp_proocol.STREAMING:
             self._log.debug('streaming payload=%s' % [ payload.data ] )
             pkt = streaming.packet(raw=payload.data)
-            self.handler.got_packet(pkt, payload.srcport, payload.dstport)
+            yield From(self.handler.got_packet(pkt, payload.srcport, payload.dstport))
+        else:
+            self._log.warn('bad message payload')
+            raise Return()
+            
+                
+    @asyncio.coroutine
+    def _msg_handle_host_lookup_reply(self, msg):
+        """
+        handle host message reply
+        """
+        self._log.debug('hlr rid={}'.format(msg.rid))
+        if msg.rid in self._host_lookups:
+            ftr, name = self._host_lookups[msg.rid]
+            if msg.dest is not None:
+                self._put_dest_cache(name, msg.dest)
+                self._log.debug('got dest: {}'.format(msg.dest))
+                if not ftr.done():
+                    ftr.set_result(msg.dest)
+            self._host_lookups.pop(msg.rid)
+        raise Return()
+            
+    @asyncio.coroutine
+    def _msg_handle_session_status(self, msg):
+        """
+        handle session status message
+        """
+        self._log.info('session status: {}'.format(msg.status))
+        if msg.status == messages.session_status.CREATED:
+            self._log.debug('session created')
+            self._sid = msg.sid
+            asyncio.async(self.handler.session_made(self))
+        else:
+            asyncio.async(self.handler.session_refused())
+        raise Return()
 
     def send_packet(self, dest, packet, srcport=0, dstport=0):
-        self._send_dgram(None, packet.serialize(), srcport, dstport, datatypes.i2cp_protocol.STREAMING)
-
+        """
+        send a streaming packet to a destination
+        """
+        self._log.debug('send packet to {}: {}'.format(dest.base32(), packet))
+        p = datatypes.i2cp_payload(proto=dataypes.i2cp_protocol.STREAMING, srcport=srcport, dstport=dstport, data=packet.serialize())
+        dest = self._check_dest_cache(dest)
+        msg = messages.SendMessageMessage(sid=self._sid, dest=dest, payload=p)
+        tsk = asyncio.async(self._send_msg(msg))
+        tsk.add_done_callback(lambda x : self._log.debug('sent packet'))
+        
     def send_raw_dgram(self, dest, data, srcport=0, dstport=0):
-        self._send_dgram(datatypes.raw_datagram, dest, data, srcport, dstport)
+        asyncio.async(self._send_dgram(datatypes.raw_datagram, dest, data, srcport, dstport))
 
     def send_dsa_dgram(self, dest, data, srcport=0, dstport=0):
-        self._send_dgram(datatypes.dsa_datagram, dest, data, srcport, dstport)
+        asyncio.async(self._send_dgram(datatypes.dsa_datagram, dest, data, srcport, dstport))
 
-    def _send_dgram(self, dgram_class, dest, data, srcport=0, dstport=0, protocol=None):
+    @asyncio.coroutine
+    def _send_dgram(self, dgram_class, dest, data, srcport=0, dstport=0):
+        dest = self._check_dest_cache(dest)
         if not isinstance(data, bytes):
-            data = bytes(data, 'utf-8')
-        def runit(_dest):
+            data = bytearray(data, 'utf-8')
+        def runit(_dest, direct=False):
+            self._log.debug('runit')
+            if not direct:
+                _dest = _dest.result()
             if _dest is None:
-                self._log.warn('no such host: %s' % dest)
                 return
-            self._log.info('send %d bytes to %s'%(len(data), _dest.base32()))
-            if dgram_class is None:
-                p = datatypes.i2cp_payload(proto=protocol, srcport=srcport, dstport=dstport, data=data)
             else:
-                dgram = dgram_class(dest=self.dest, payload=data).serialize()
-                self._log.debug('dgram=%s' % [dgram])
-                p = datatypes.i2cp_payload(proto=dgram_class.protocol ,srcport=srcport,dstport=dstport, data=dgram)
-            self._log.debug('payload=%s' % [p])
-            msg = messages.SendMessageMessage(sid=self._sid, dest=_dest, payload=p.serialize())
-            self._send_msg(msg)
+                self._log.debug('sending dgram to {}'.format(_dest.base32()))
+                dgram = dgram_class(dest=self.dest, payload=data)
+                p = datatypes.i2cp_payload(data=dgram.serialize(), srcport=srcport, dstport=dstport, proto=dgram_class.protocol)
+                msg = messages.SendMessageMessage(sid=self._sid, dest=_dest, payload=p.serialize())
+                tsk = asyncio.async(self._send_msg(msg))
+                tsk.add_done_callback(lambda x : self._log.debug('sent dgram'))
 
         if isinstance(dest, str):
-            self._async_lookup(dest,runit)
+            self.lookup_async(dest, runit)
         else:
-            runit(dest)
-
-    def _send_msg(self, msg):
-        self._sendq.put(msg)
-
-    def _send_raw(self, data):
-        if self._sock is None:
-            self._log.error('cannot send data, connection closed')
-            return
-        try:
-            self._log.debug('--> %s' % [data])
-        except UnicodeDecodeError:
-            # TODO Fix for Python 2
-            pass
-        try:
-            sent = self._sock.send(data)
-            self._log.debug('sent %d bytes' % sent)
-        except OSError as e:
-            self._log.error('cannot send: %s' % e)
-
-
+            runit(dest, direct=True)
+        raise Return()
+        
+    def _check_dest_cache(self, dest):
+        if dest in self._dest_cache:
+            return self._dest_cache[dest]
+        return dest
+    
     def close(self):
-        if self._sfd:
-            self._sfd.close()
-            self._sfd = None
         self._log.debug('closing connection...')
-        if self._sock:
-            self._sock.shutdown(socket.SHUT_RDWR)
-            self._sock.close()
-            self._sock = None
-            self._connected = False
-            for t in self._threads:
-                t.join()
+        self._writer.close()
+        self._connected = False
+        self._reader = None
+        self._writer = None
 
+    def __del__(self):
+        if self.is_open():
+            self.close()
+        
 def lookup(name, i2cp_host='127.0.0.1', i2cp_port=7654):
-    if not name.endswith('.i2p'):
-        return datatypes.destination(name, b64=True)
-    c = Connection(I2CPHandler(), i2cp_host=i2cp_host, i2cp_port=i2cp_port)
-    dest = None
-    try:
-        c.open()
-        msg = messages.HostLookupMessage(name=name, sid=c._sid)
-        c._send_raw(msg.serialize())
-        msg, raw = c._recv_msg()
-        if msg.type == messages.message_type.HostLookupReply:
-            msg = messages.HostLookupReplyMessage(raw=raw)
-            c._log.debug(msg)
-            dest = msg.dest
-    except KeyboardInterrupt:
-        pass
-    finally:
-        c.close()
-    return dest
-
+    """
+    quick name lookup
+    """
+    _ftr = asyncio.Future()
+    def _hook_done(ftr):
+        _ftr.set_result(ftr.result())
+        
+    con = Connection(None, i2cp_host=i2cp_host, i2cp_port=i2cp_port, lookup=name)
+    con.open()
+    con.lookup_async(name, _hook_done)
+    asyncio.get_event_loop().run_until_complete(_ftr)
+    return _ftr.result()

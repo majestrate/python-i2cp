@@ -102,8 +102,8 @@ class _i2p_socket(object):
         if self._i2cp is not None:
             raise I2CPException('socket already in use')
             
-        if keyfile is None:
-            self._keyfd, keyfile = 
+        #if keyfile is None:
+        #    self._keyfd, keyfile = 
 
         self._i2cp = i2cp.Connection(self, keyfile=keyfile, i2cp_host='127.0.0.1', i2cp_port=7654)
         self._start_i2cp()
@@ -121,8 +121,8 @@ class _i2p_socket(object):
             raise I2CPException('bind() requires a tuple (keyfile, portno)')
         keyfile = addr[0]
         self._port = addr[1]
-        self._i2cp = i2cp.Connection)
-        self._start_i2cp()
+        #self._i2cp = i2cp.Connection)
+        #self._start_i2cp()
         
 
     def close(self):
