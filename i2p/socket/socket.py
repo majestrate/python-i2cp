@@ -8,6 +8,8 @@ from i2p.socket import streaming
 import logging
 import queue
 
+import trollius as asyncio
+from trollius import Return, From
 
 class _i2p_base_socket(client.I2CPHandler):
 
@@ -25,69 +27,14 @@ class _i2p_base_socket(client.I2CPHandler):
         self._session_opts = dict(session_opts)
         self.i2cp = client.Connection(self, keyfile=self._keyfile, i2cp_host=self._i2cp_host, i2cp_port=self._i2cp_port)
 
+    @asyncio.coroutine
+    def handle_packet(self, pkt, srcport, dstport):
+        
         
     def __del__(self):
         # explicitly close tempkey fd
         if self._keyfd is not None:
             self._keyfd.close()
-
-
-class _i2p_server_socket(_i2p_base_socket):
-    """
-    server socket
-    accepts incoming connections
-    """
-
-
-    def _port_okay(self, dstport):
-        return self._port is not None and dstport == self._port or True
-
-    def got_packet(self, pkt, srcport, dstport):
-        """
-        handle incoming packet
-        """
-        
-        
-    def _flush_send(self):
-        """
-        flush send queue
-        """
-        while True:
-            pkt = self._handler.poll_outgoing()
-            if pkt is None:
-                break
-            self._send_pkt(msg)
-
-    def _send_pkt(self, msg):
-        self.i2cp.send_packet(msg.dest, msg.packet)
-        
-
-    def session_made(self, conn):
-        """
-        called after an i2cp session is made successfully with the i2p router
-        :param conn: underlying connection
-        """
-        self._flush_send()
-
-
-    def session_refused(self):
-        """
-        called if the i2p router refuses an i2cp session 
-        """
-        self.close()
-
-    def disconnected(self, reason):
-        """
-        called if the i2cp session is disconnected abruptly
-        """
-        self.close()
-
-    def start(self):
-        """
-        start i2cp session
-        """
-        self.i2cp.open()
-        self.i2cp.start()
 
 
 class _i2p_socket(object):
