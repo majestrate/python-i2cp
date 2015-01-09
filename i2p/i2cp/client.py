@@ -235,8 +235,10 @@ class Connection(object):
         """
         self._log.debug('handle vls message')
         #TODO: should we regen keys?
-        enckey = crypto.ElGamalGenerate()
-        sigkey = crypto.DSAGenerate()
+        #enckey = crypto.ElGamalGenerate()
+        #sigkey = crypto.DSAGenerate()
+        enckey = self.dest.enckey
+        sigkey = self.dest.sigkey
         ls = datatypes.leaseset(leases=msg.leases, dest=self.dest, ls_enckey=enckey, ls_sigkey=sigkey)
         self._log.debug('made leaseset: {}'.format(ls))
         msg = messages.CreateLSMessage(

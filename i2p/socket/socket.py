@@ -29,7 +29,9 @@ class _i2p_base_socket(client.I2CPHandler):
 
     @asyncio.coroutine
     def handle_packet(self, pkt, srcport, dstport):
-        
+        """
+        handle incoming stremaing packet
+        """
         
     def __del__(self):
         # explicitly close tempkey fd
