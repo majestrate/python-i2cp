@@ -193,8 +193,11 @@ class RequestVarLSMessage(Message):
             raw = raw[32:]
             tid = struct.unpack(b'>I', raw[:4])[0]
             raw = raw[4:]
+            end_date = raw[:8]
+            raw = raw[8:]
             num_ls -= 1
-            self.leases.append(datatypes.lease(ri_hash=ri, tid=tid))
+            self.leases.append(datatypes.lease(ri_hash=ri, tid=tid, end_date=end_date))
+        
 
 class RequestLSMessage(Message):
 
@@ -206,21 +209,15 @@ class RequestLSMessage(Message):
         numtun = util.get_as_int(raw[2])
         self._log.debug('got %d leases' % numtun)
         raw = raw[3:]
-        while numtun > 0:
-            ri = raw[:32]
-            raw = raw[32:]
-            tid = struct.unpack(b'>I', raw[:4])[0]
-            raw = raw[4:]
-            numtun -= 1
-            self.leases.append(datatypes.lease(ri_hash=ri, tid=tid))
-        self._log.debug('left over data: %d bytes' % len(raw))
-        self.date = datatypes.date(raw)
+        ls = datatypes.leaseset(raw)
+        for l in ls.leases:
+            self.leases.append(l)
+        #self._log.debug('left over data: %d bytes' % len(raw))
 
     def __str__(self):
-        return '[RequestLS sid=%d date=%s leases=%s date=%s]' % (self.sid,
-                                                                 self.date,
-                                                                 self.leases,
-                                                                 self.date)
+        return '[RequestLS sid=%d date=%s leases=%s]' % (self.sid,
+                                                         self.date,
+                                                         self.leases)
 
 class CreateLSMessage(Message):
 

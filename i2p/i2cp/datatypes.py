@@ -66,7 +66,8 @@ class leaseset(object):
             data = data[128:]
             numls = data[0]
             while numls > 0:
-                l = data[:44]
+                _l = data[:44]
+                l = lease(_l[:32], _l[32:36], _l[36:44])
                 data = data[44:]
                 numls -= 1
                 self.leases.append(l)
@@ -97,9 +98,11 @@ class leaseset(object):
         data += int(len(self.leases)).to_bytes(1,'big')
         for l in self.leases:
             data += l.serialize()
-        sig = self.dest.dsa_sign(data)
-        self.dest.dsa_verify(data, sig)
-        return data + sig
+        sig = crypto.DSA_SHA1_SIGN(self.sigkey, data)
+        #self.dest.dsa_verify(data, sig, doublehash=False)
+        data += sig
+        self._log.debug('LS has length %d' % len(data))
+        return data 
 
 class destination(object):
 
@@ -196,7 +199,7 @@ class i2p_string(object):
     @staticmethod
     def parse(data):
         dlen = util.get_as_int(data[0])
-        return data[:dlen].decode('utf-8')
+        return bytearray(data[:dlen])
 
     @staticmethod
     def create(data):
@@ -210,20 +213,20 @@ class lease(object):
 
     _log = logging.getLogger('lease')
 
-    def __init__(self, ri_hash=None, tid=None):
+    def __init__(self, ri_hash=None, tid=None, end_date=None):
         self.ri = ri_hash
         self.tid = tid
-        self.data = bytes()
+        self.end_date = end_date
         self._log.debug('ri_hash %d bytes'%len(ri_hash))
-        assert len(ri_hash) == 32
-        self.data += ri_hash
-        self.data += struct.pack(b'>I', tid)
-        self.data += date()
-        self._log.debug('lease is %d bytes' % len(self.data))
-        assert len(self.data) == 44
 
     def serialize(self):
-        return self.data
+        data = bytearray()
+        data += self.ri
+        data += struct.pack(b'>I', self.tid)
+        data += self.end_date
+        self._log.debug('lease is %d bytes' % len(data))
+        assert len(data) == 44
+        return data
 
     def __repr__(self):
         return '[Lease ri=%s tid=%d]' % ([self.ri], self.tid)

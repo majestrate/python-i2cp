@@ -99,23 +99,27 @@ def DSAGenerate():
     return DSAKey(y, x)
 
 
-def DSA_SHA1_SIGN(key, data):
+def DSA_SHA1_SIGN(key, data, doublehash=True):
     """
     generate DSA-SHA1 signature
     """
     if key.has_private():
         k = random().randint(1, key.q - 1)
-        R, S =  key.sign(sha1(data), k)
+        if doublehash:
+            data = sha1(data)
+        R, S =  key.sign(data, k)
         return int(R).to_bytes(20,'big') + int(S).to_bytes(20,'big')
     else:
         raise I2CPException('No Private Key')
 
-def DSA_SHA1_VERIFY(key, data, sig):
+def DSA_SHA1_VERIFY(key, data, sig, doublehash=True):
     """
     verify DSA-SHA1 signature
     """
+    if doublehash:
+        data = sha1(data)
     R, S = int.from_bytes(sig[:20],'big'), int.from_bytes(sig[20:],'big')
-    if not key.verify(sha1(data), (R,S)):
+    if not key.verify(data, (R,S)):
         raise I2CPException('DSA_SHA1_VERIFY Failed')
 
 def dsa_public_key_to_bytes(key):
