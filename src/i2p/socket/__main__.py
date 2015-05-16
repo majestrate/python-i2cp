@@ -21,7 +21,7 @@ def main():
 
     args = ap.parse_args()
 
-    sock = i2psocket()
+    sock = i2psocket.socket()
 
     sock.connect((args.host, args.port))
     data = bytes('GET / HTTP/1.0\r\n\r\n')
@@ -30,6 +30,7 @@ def main():
     sock.close()
     print (data)
 
+    
 
 
 if __name__ == '__main__':

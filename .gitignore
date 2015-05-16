@@ -1,10 +1,4 @@
-*.pyc
 *~
 _version.py
 version.txt
 .tox
-build
-dist
-*.egg-info
-*.egg
-.idea
