@@ -1,7 +1,7 @@
 import struct
 import logging
 from enum import Enum
-from i2p.i2cp.datatypes import *
+from i2p.i2cp import datatypes
 
 class packet_flag(Enum):
     SYNC = 1 << 0
@@ -50,7 +50,9 @@ class packet:
         (2, 'flags'),
         (2, '_opts_len')
     )
+
     
+    _log = logging.getLogger("streaming-packet")
 
     def __init__(self, raw=None, 
                  send_sid=0, recv_sid=0, seqno=0, 
@@ -61,7 +63,6 @@ class packet:
 
         from raw=<data> or with parameters
         """
-        self._log = logging.getLogger(self.__class__.__name__)
         if raw is None:
             self.send_sid = send_sid
             self.recv_sid = recv_sid
@@ -129,3 +130,56 @@ class packet:
         for attr in attrs:
             _str += '%s=%s ' % ( attr, getattr(self, attr))
         return _str + ']'
+
+    def verify(self):
+        """
+        verify the signature on this streaming packet if it has one
+        :return: true if valid otherwise false
+        """
+        if packet_flags.SIG_INC in self.flags:
+            self._log.debug("verify packet signature")
+            # TODO: implement
+            self._log.warn("packet not verified, not implemented")
+            return True
+        else:
+            return False
+
+    def is_syn(self):
+        """
+        :return: if this is an initial incoming syn packet
+        """
+        return self.has_flags(packet_flags.FROM_INC, packet_flags.SYNC, packet_flags.SIG_INC)
+
+    def get_from(self):
+        """
+        :return: the destination of who sent this packet
+        """
+        offset = 0
+        if packet_flags.DELAY in self.flags:
+            offset += 2
+        if packet_flags.FROM_INC in self.flags:
+            return datatypes.destination(raw=self.options[offset:])
+        return None
+        
+    def is_rst(self):
+        """
+        :return: true if this is a valid rst packet
+        """
+        return self.has_flags(packet_flags.FROM_INC, packet_flags.RESET, packet_flags.SIG_INC)
+        
+    def has_flags(self, *args):
+        """
+        check if all the given flags are set in this packet
+        :return: true if all flags are set, otherwise false
+        """
+        for arg in args:
+            if arg not in self.flags:
+                return False
+        return True
+
+
+    def is_ack(self):
+        """
+        :return: true if this is a regular ack
+        """
+        return self.seqno == 0 and packet_flags.SYNC not in self.flags

@@ -17,7 +17,7 @@ class TestSocket(TestCase):
         sock.connect(("psi.i2p", 80))
         assert sock.isConnected()
         sock.close()
-        asser not sock.isConnected()
+        assert not sock.isConnected()
 
     def test_bind(self):
         """

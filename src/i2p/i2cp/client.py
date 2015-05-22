@@ -55,10 +55,12 @@ class I2CPHandler(object):
         raise Return()
     
 class Connection(object):
+
+    _log = logging.getLogger('I2CP-Connection')
+
     
-    def __init__(self, handler, lookup=None, session_options={}, keyfile='i2cp.key', i2cp_host='127.0.0.1', i2cp_port=7654):
+    def __init__(self, handler, lookup=None, session_options={}, keyfile='i2cp.key', i2cp_host='127.0.0.1', i2cp_port=7654, evloop=None):
         self._i2cp_host, self._i2cp_port = i2cp_host, i2cp_port
-        self._log = logging.getLogger('I2CP-Connection-%s-%d' % (i2cp_host, i2cp_port))
         self._sid = None
         self._lookup = lookup
         self.dest = None
@@ -81,6 +83,10 @@ class Connection(object):
             messages.message_type.MessagePayload : self._msg_handle_message_payload,
         }
         self._dest_cache = dict()
+        if evloop is None:
+            self._loop = asyncio.get_event_loop()
+        else:
+            self._loop = evloop
         
     def is_connected(self):
         return self._connected
@@ -90,7 +96,7 @@ class Connection(object):
         open session to i2p router
         """
         self._log.debug('connecting...')
-        tsk = asyncio.async(asyncio.open_connection(self._i2cp_host, self._i2cp_port))
+        tsk = self._async(asyncio.open_connection(self._i2cp_host, self._i2cp_port))
         tsk.add_done_callback(self._cb_connected)
         
     def generate_dest(self, keyfile):
@@ -104,12 +110,19 @@ class Connection(object):
         """
         self._log.info('async lookup {}'.format(name))
         msg = messages.HostLookupMessage(name=name, sid=self._sid)
-        tsk = asyncio.async(self._send_msg(msg))
+        tsk = self._async(self._send_msg(msg))
         self._host_lookups[msg.rid] = tsk, name
         self._log.debug('put rid {}'.format(msg.rid))
         if hook is not None:
             tsk.add_done_callback(hook)
 
+    def _async(self, coro):
+        """
+        do stuff thread safe
+        """
+        return self._loop.call_soon_threadsafe(asyncio.async, coro)
+        
+            
     def _put_dest_cache(self, name, dest):
         self._log.debug('put dest cache for {}'.format(name))
         self._dest_cache[name] = dest
@@ -125,7 +138,7 @@ class Connection(object):
         else:
             _len, _type = struct.unpack(b'>IB', data)
             _type = messages.message_type(_type)
-            asyncio.async(self._read_msg(_len, _type, data))
+            self._async(self._read_msg(_len, _type, data))
         
         
     def _got_message(self, msgtype, msgbody, msgraw):
@@ -136,7 +149,7 @@ class Connection(object):
             handler_coro = self._msg_handlers[msgtype]
             self._log.debug(handler_coro)
             msg = messages.messages[msgtype](raw=msgraw)
-            tsk = asyncio.async(handler_coro(msg))
+            tsk = self._async(handler_coro(msg))
             tsk.add_done_callback(self._recv_msg_hdr)
         else:
             self._log.warn('unhandled message of type: {}'.format(msgtype))
@@ -152,7 +165,7 @@ class Connection(object):
         self._log.info('recv %d bytes' % msglen)
         if self._reader:
             self._log.debug('read message of size {}'.format(msglen))
-            tsk = asyncio.async(self._reader.readexactly(msglen))
+            tsk = self._async(self._reader.readexactly(msglen))
             tsk.add_done_callback(lambda ftr : self._got_message(msgtype, ftr.result(), msghdr + ftr.result()))
         raise Return()
         
@@ -162,7 +175,7 @@ class Connection(object):
         """
         if self._reader:
             self._log.debug('recv header...')
-            tsk = asyncio.async(self._reader.readexactly(5))
+            tsk = self._async(self._reader.readexactly(5))
             tsk.add_done_callback(self._cb_recv_msg_hdr)
 
     def _begin_session(self, ftr):
@@ -174,7 +187,7 @@ class Connection(object):
             self._recv_msg_hdr(None)
         else:
             msg = messages.GetDateMessage()
-            tsk = asyncio.async(self._send_msg(msg))
+            tsk = self._async(self._send_msg(msg))
             tsk.add_done_callback(self._recv_msg_hdr)
         
             
@@ -188,7 +201,7 @@ class Connection(object):
             if self._lookup is None:
                 self.generate_dest(self.keyfile)
             self._log.info('connection established, out dest is %s' % self.dest.base32())
-            tsk = asyncio.async(self._send_raw(util.PROTOCOL_VERSION))
+            tsk = self._async(self._send_raw(util.PROTOCOL_VERSION))
             tsk.add_done_callback(self._begin_session)
         else:
             self._log.error('could not connect to i2p router')
@@ -224,7 +237,7 @@ class Connection(object):
         """
         reason = msg.reason
         self._log.warn('session disconnected from i2p router: {}'.format(reason))
-        tsk = asyncio.async(self.handler.disconnected(reason))
+        tsk = self._async(self.handler.disconnected(reason))
         self.close()
         raise Return()
 
@@ -251,7 +264,7 @@ class Connection(object):
             enckey=enckey,
             leaseset=ls)
         self._log.debug('made message')
-        yield From(self._send_msg(msg))
+        raise Return(self._send_msg(msg))
 
        
     @asyncio.coroutine
@@ -319,9 +332,9 @@ class Connection(object):
         if msg.status == messages.session_status.CREATED:
             self._log.debug('session created')
             self._sid = msg.sid
-            asyncio.async(self.handler.session_made(self))
+            self._async(self.handler.session_made(self))
         else:
-            asyncio.async(self.handler.session_refused())
+            self._async(self.handler.session_refused())
         raise Return()
 
     def send_packet(self, dest, packet, srcport=0, dstport=0):
@@ -332,14 +345,13 @@ class Connection(object):
         p = datatypes.i2cp_payload(proto=dataypes.i2cp_protocol.STREAMING, srcport=srcport, dstport=dstport, data=packet.serialize())
         dest = self._check_dest_cache(dest)
         msg = messages.SendMessageMessage(sid=self._sid, dest=dest, payload=p)
-        tsk = asyncio.async(self._send_msg(msg))
-        tsk.add_done_callback(lambda x : self._log.debug('sent packet'))
+        tsk = self._async(self._send_msg(msg))
         
     def send_raw_dgram(self, dest, data, srcport=0, dstport=0):
-        asyncio.async(self._send_dgram(datatypes.raw_datagram, dest, data, srcport, dstport))
+        self._async(self._send_dgram(datatypes.raw_datagram, dest, data, srcport, dstport))
 
     def send_dsa_dgram(self, dest, data, srcport=0, dstport=0):
-        asyncio.async(self._send_dgram(datatypes.dsa_datagram, dest, data, srcport, dstport))
+        self._async(self._send_dgram(datatypes.dsa_datagram, dest, data, srcport, dstport))
 
     @asyncio.coroutine
     def _send_dgram(self, dgram_class, dest, data, srcport=0, dstport=0):
@@ -357,8 +369,7 @@ class Connection(object):
                 dgram = dgram_class(dest=self.dest, payload=data)
                 p = datatypes.i2cp_payload(data=dgram.serialize(), srcport=srcport, dstport=dstport, proto=dgram_class.protocol)
                 msg = messages.SendMessageMessage(sid=self._sid, dest=_dest, payload=p.serialize())
-                tsk = asyncio.async(self._send_msg(msg))
-                tsk.add_done_callback(lambda x : self._log.debug('sent dgram'))
+                tsk = self._async(self._send_msg(msg))
 
         if isinstance(dest, str):
             self.lookup_async(dest, runit)
@@ -393,5 +404,5 @@ def lookup(name, i2cp_host='127.0.0.1', i2cp_port=7654):
     con = Connection(None, i2cp_host=i2cp_host, i2cp_port=i2cp_port, lookup=name)
     con.open()
     con.lookup_async(name, _hook_done)
-    asyncio.get_event_loop().run_until_complete(_ftr)
+    asyncio.new_event_loop().run_until_complete(_ftr)
     return _ftr.result()
