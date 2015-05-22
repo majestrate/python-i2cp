@@ -120,7 +120,7 @@ class Connection(object):
         """
         do stuff thread safe
         """
-        return self._loop.call_soon_threadsafe(asyncio.async, coro)
+        return self._loop.create_task(coro)
         
             
     def _put_dest_cache(self, name, dest):

@@ -58,8 +58,10 @@ def main():
     ap.add_argument('--dest', type=str, default=None)
     ap.add_argument('--keyfile', type=str, default=None)
     ap.add_argument('--count', type=int, default=5)
+    ap.add_argument('--host', type=str, default='127.0.0.1')
+    ap.add_argument('--port', type=int, default=7654)
     ap.add_argument('--mtu', type=int, default=2 ** 12)
-
+    
     args = ap.parse_args()
 
     opts = {
@@ -70,7 +72,7 @@ def main():
 
 
     if args.keyfile:
-        cl = i2cp.Connection(handlers={'dgram':got_dgram})
+        cl = i2cp.Connection(i2cp_host=args.host, i2cp_port=args.port, handlers={'dgram':got_dgram})
         cl.open()
         cl.start_session(opts=opts,keyfile=args.keyfile)
         log(cl.dest.base32())
@@ -79,16 +81,10 @@ def main():
             log('got %d bytes' % data())
     elif args.dest:
         payload = lambda : os.urandom(args.mtu)
-        dest = i2cp.lookup(args.dest)
-        if dest is None:
-            log('lookup failed')
-            exit(0)
-        print_banner(dest.base32())
         clients = []
         for n in range(args.count):
-            cl = i2cp.Connection()
+            cl = i2cp.Connection(None, i2cp_host=args.host, i2cp_port=args.port, session_options=opts,keyfile='%d.key'% n)
             cl.open()
-            cl.start_session(opts=opts,keyfile='%d.key'% n)
             clients.append(cl)
             log('opened session %d' % n)
         
@@ -100,7 +96,7 @@ def main():
         while True:
             for cl in clients:
                 raw = payload()
-                cl.send_dgram(dest, raw)
+                cl.send_dgram(args.dest, raw)
                 inc(len(raw))
                 time.sleep(0.1)
     else:
