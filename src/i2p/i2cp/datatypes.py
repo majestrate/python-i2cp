@@ -135,9 +135,9 @@ class destination(object):
                 enckey, sigkey = crypto.load_keypair(rf)
                 data = rf.read()
                 cert = certificate()
-        if edkey:
-            return destination(enckey, sigkey, cert, edkey=edkey)
-        return destination(enckey, sigkey, cert)
+        if enckey and sigkey:
+            return destination(enckey, sigkey, cert)
+        raise I2CPException("failed to load key from {}".format(fname))
 
     def __str__(self):
         return '[Destination %s %s cert=%s]' % (
