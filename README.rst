@@ -14,5 +14,4 @@ see examples directory for usage
 TODO:
 
 * i2p.socket -- socket like objects for i2p tcp/udp
-* i2p.inet -- ip over i2p with tun interface
 * i2p.control -- i2p jsonrpc
