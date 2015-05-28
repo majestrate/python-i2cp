@@ -87,6 +87,7 @@ def main():
     ap.add_argument("--iface", type=str, default="i2ptun0", help="what we want to call the new network interface")
     ap.add_argument("--keyfile", type=str, default="i2p.tun.key", help="i2cp destination keys")
     ap.add_argument("--debug", action="store_const", const=True, default=False, help="toggle debug mode")
+    ap.add_argument("--tap", action="store_const", const=True, default=False, help="use tap instead of tun")
     args = ap.parse_args()
 
     log = logging.getLogger("i2p.tun")
@@ -117,7 +118,7 @@ def main():
     if args.remote is None:
         handler = i2cp.PrintDestinationHandler()
     else:
-        tun = tundev.opentun(args.iface)
+        tun = tundev.opentun(args.iface, args.tap)
         if args.local_addr is None:
             log.error("no local ip address specified")
             return
