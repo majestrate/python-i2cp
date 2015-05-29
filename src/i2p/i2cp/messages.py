@@ -187,6 +187,7 @@ class RequestVarLSMessage(Message):
         raw = self.body
         self.sid = struct.unpack(b'>H', raw[:2])
         num_ls = util.get_as_int(raw[2])
+        raw = raw[3:]
         self.leases = []
         while num_ls > 0:
             ri = raw[:32]
@@ -197,7 +198,7 @@ class RequestVarLSMessage(Message):
             raw = raw[8:]
             num_ls -= 1
             self.leases.append(datatypes.lease(ri_hash=ri, tid=tid, end_date=end_date))
-        
+        self._log.debug("left overs {}".format([raw]))
 
 class RequestLSMessage(Message):
 
