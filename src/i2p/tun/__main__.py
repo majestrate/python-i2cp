@@ -66,7 +66,7 @@ class Handler(i2cp.I2CPHandler):
         """
         # read from interface
         self._log.debug("read tun")
-        buff = dev.read(self._mtu+60)
+        buff = dev.read(self._mtu-60)
         # make a packet
         data = self._packet_factory(buff)
         # serialize packet to bytes
