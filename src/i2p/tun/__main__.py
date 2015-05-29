@@ -23,7 +23,7 @@ class Handler(i2cp.I2CPHandler):
         """
         self._dest = remote_dest
         self._tundev = tun
-        self._mtu = tun.mtu
+        self._mtu = tun.mtu - 60
         self._packet_factory = packet_factory
         self._write_buff = list()
         if loop:
@@ -66,7 +66,7 @@ class Handler(i2cp.I2CPHandler):
         """
         # read from interface
         self._log.debug("read tun")
-        buff = dev.read(self._mtu-60)
+        buff = dev.read(self._mtu)
         # make a packet
         data = self._packet_factory(buff)
         # serialize packet to bytes
