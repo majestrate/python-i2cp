@@ -271,9 +271,9 @@ class Connection(object):
         handle variable lease set request message
         """
         self._log.debug('handle vls message')
-        #dummy_enckey = crypto.ElGamalGenerate()
-        #dummy_sigkey = crypto.DSAGenerate()
-        enckey = self.dest.enckey
+        enckey = crypto.ElGamalGenerate()
+        dummy_sigkey = crypto.DSAGenerate()
+        #enckey = self.dest.enckey
         sigkey = self.dest.sigkey
         leases = list()
         for l in msg.leases:
@@ -283,7 +283,7 @@ class Connection(object):
         self._log.debug('made leaseset: {}'.format(ls))
         msg = messages.CreateLSMessage(
             sid=self._sid,
-            sigkey=sigkey,
+            sigkey=dummy_sigkey,
             enckey=enckey,
             leaseset=ls)
         self._log.debug('made message')
