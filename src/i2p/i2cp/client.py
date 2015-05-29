@@ -93,6 +93,7 @@ class Connection(object):
         self._done = False
         self.dest = None
         self._connected = False
+        self._created = False
         self.handler = handler or I2CPHandler()
         self.keyfile = keyfile
         self.opts = dict(session_options)
@@ -251,9 +252,10 @@ class Connection(object):
         """
         handle disconnect message
         """
-        self._log.info('creating session...')
-        msg = messages.CreateSessionMessage(opts=self.opts, dest=self.dest, session_date=datatypes.date())
-        yield From(self._send_msg(msg))
+        if not self._created:
+            self._log.info('creating session...')
+            msg = messages.CreateSessionMessage(opts=self.opts, dest=self.dest, session_date=datatypes.date())
+            yield From(self._send_msg(msg))
         
     @asyncio.coroutine
     def _msg_handle_disconnect(self, msg):
@@ -354,6 +356,7 @@ class Connection(object):
         self._log.info('session status: {}'.format(msg.status))
         if msg.status == messages.session_status.CREATED:
             self._log.debug('session created')
+            self._created = True
             self._sid = msg.sid
             self._async(self.handler.session_made(self))
         else:
