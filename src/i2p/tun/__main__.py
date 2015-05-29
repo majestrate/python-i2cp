@@ -23,7 +23,7 @@ class Handler(i2cp.I2CPHandler):
         """
         self._dest = remote_dest
         self._tundev = tun
-        self._mtu = tun.mtu - 60
+        self._mtu = tun.mtu + 60
         self._packet_factory = packet_factory
         self._write_buff = list()
         if loop:
