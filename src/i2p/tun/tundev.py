@@ -6,6 +6,7 @@ try:
     import pytun
 except ImportError:
     print("no module pytun, i2p.tun won't work without it")
+    print("pip install python-pytun")
     raise
 
 def opentun(ifname, tap):

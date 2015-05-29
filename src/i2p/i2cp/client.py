@@ -99,6 +99,8 @@ class Connection(object):
         self.opts['i2cp.fastReceive'] = 'true'
         self.send_dgram = self.send_dsa_dgram
         self._host_lookups = dict()
+        # create encryption key for LS per session
+        self._enckey = crypto.ElGamalGenerate()
         self._msg_handlers = {
             messages.message_type.SessionStatus : self._msg_handle_session_status,
             messages.message_type.RequestLS : self._msg_handle_request_ls,
@@ -271,7 +273,6 @@ class Connection(object):
         handle variable lease set request message
         """
         self._log.debug('handle vls message')
-        enckey = crypto.ElGamalGenerate()
         dummy_sigkey = crypto.DSAGenerate()
         #enckey = self.dest.enckey
         sigkey = self.dest.sigkey
@@ -279,12 +280,12 @@ class Connection(object):
         for l in msg.leases:
             l.end_date = datatypes.date((time.time() * 1000) + 600000)
             leases.append(l)
-        ls = datatypes.leaseset(leases=leases, dest=self.dest, ls_enckey=enckey, ls_sigkey=sigkey)
+        ls = datatypes.leaseset(leases=leases, dest=self.dest, ls_enckey=self._enckey, ls_sigkey=sigkey)
         self._log.debug('made leaseset: {}'.format(ls))
         msg = messages.CreateLSMessage(
             sid=self._sid,
             sigkey=dummy_sigkey,
-            enckey=enckey,
+            enckey=self._enckey,
             leaseset=ls)
         self._log.debug('made message')
         yield From(self._send_msg(msg))
