@@ -23,6 +23,7 @@ class Handler(i2cp.I2CPHandler):
         """
         self._dest = remote_dest
         self._tundev = tun
+        # include ip header
         self._mtu = tun.mtu + 60
         self._packet_factory = packet_factory
         self._write_buff = list()
@@ -132,7 +133,7 @@ def main():
         # make handler
         handler = Handler(args.remote, tun, lambda x : x, loop)
 
-    conn = i2cp.Connection(handler, i2cp_host=i2cp_host, i2cp_port=i2cp_port, keyfile=args.keyfile, evloop=loop, session_options={"inbound.quantity":"1", "outbound.quantity":"1"})
+    conn = i2cp.Connection(handler, i2cp_host=i2cp_host, i2cp_port=i2cp_port, keyfile=args.keyfile, evloop=loop)
     conn.open()
     loop.call_soon(_wait_for_done, conn, 1.0)
     loop.run_until_complete(ftr)
