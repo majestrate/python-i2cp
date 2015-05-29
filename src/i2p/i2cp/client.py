@@ -234,11 +234,10 @@ class Connection(object):
         """
         send raw bytes
         """
-        self._log.info('send %d bytes' % len(data))
-        self._log.debug('--> {}'.format( [data]))
         self._writer.write(data)
-        yield From(self._writer.drain())
-        
+        yield From(self._writer.drain()) 
+        self._log.info('send %d bytes' % len(data))
+        self._log.debug('--> {}'.format( [data]))       
 
     @asyncio.coroutine
     def _send_msg(self, msg):
