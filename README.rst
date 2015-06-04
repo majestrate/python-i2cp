@@ -15,3 +15,6 @@ TODO:
 
 * i2p.socket -- socket like objects for i2p tcp/udp
 * i2p.control -- i2p jsonrpc
+
+
+i2p.tun requires python-pytun module from pypi
