@@ -1,6 +1,9 @@
 #
 # i2p.tun -- ipv6 compatability layer for i2p
 #
+from future.builtins import *
+
+
 from i2p.i2cp import client as i2cp
 from i2p.tun import tundev
 
@@ -79,6 +82,7 @@ def main():
     import argparse
 
     ap = argparse.ArgumentParser()
+    ap.add_argument("--hops", type=str, default=2, help="inbound/outbound tunnel length")
     ap.add_argument("--remote", type=str, default=None, help="remote destination to exchange ip packets with")
     ap.add_argument("--i2cp", type=str, default="127.0.0.1:7654", help="i2cp interface")
     ap.add_argument("--mtu", type=int, default=4096, help="interface mtu")
@@ -133,7 +137,8 @@ def main():
         # make handler
         handler = Handler(args.remote, tun, lambda x : x, loop)
 
-    conn = i2cp.Connection(handler, i2cp_host=i2cp_host, i2cp_port=i2cp_port, keyfile=args.keyfile, evloop=loop)
+    opts = {'inbound.length':'%d' % args.hops, 'outbound.length' :'%d' % args.hops}
+    conn = i2cp.Connection(handler, i2cp_host=i2cp_host, i2cp_port=i2cp_port, keyfile=args.keyfile, evloop=loop, session_options=opts)
     conn.open()
     loop.call_soon(_wait_for_done, conn, 1.0)
     loop.run_until_complete(ftr)

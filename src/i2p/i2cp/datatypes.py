@@ -407,3 +407,13 @@ class i2cp_payload(object):
             self.proto,
             self.data)
 
+
+def to_b32_bytes(val):
+    if isinstance(val, destination):
+        return to_b32_bytes(val.base64())
+    if isinstance(val, bytes):
+        if val.lower().endswith(b".b32.i2p"):
+            return util.i2p_b32decode(val)
+        else:
+            return crypto.sha256(vale)
+    raise TypeError("invalid type", val)

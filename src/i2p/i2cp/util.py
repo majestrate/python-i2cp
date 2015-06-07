@@ -42,6 +42,9 @@ def i2p_b64decode(data):
 def i2p_b32encode(data):
     return base64.b32encode(data).replace(b'=',b'').lower() + b'.b32.i2p'
 
+def i2p_b32decode(data):
+    return base64.b32decode(data[:-8].upper() + b"====")
+
 def i2p_compress(data):
     if isinstance(data, str):
         data = bytes(data, 'utf-8')
@@ -58,3 +61,4 @@ def i2p_decompress(data):
 
 def check_portnum(num):
     return isinstance(num, int) and num < 2 ** 16 and num >= 0
+
