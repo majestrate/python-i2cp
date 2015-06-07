@@ -3,7 +3,7 @@
 #
 
 from future.builtins import *
-from . import bencode
+from i2p.tun import bencode
 from i2p.i2cp.datatypes import to_b32_bytes
 
 from enum import Enum
