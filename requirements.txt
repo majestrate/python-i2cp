@@ -1,3 +1,4 @@
 pycrypto
 enum34>=1.0
 trollius
+future
