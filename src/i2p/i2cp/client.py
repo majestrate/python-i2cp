@@ -86,10 +86,11 @@ class Connection(object):
     _log = logging.getLogger('I2CP-Connection')
 
     
-    def __init__(self, handler, lookup=None, session_options={}, keyfile='i2cp.key', i2cp_host='127.0.0.1', i2cp_port=7654, evloop=None):
+    def __init__(self, handler, session_options={}, keyfile='i2cp.key', i2cp_host='127.0.0.1', i2cp_port=7654, evloop=None):
         self._i2cp_host, self._i2cp_port = i2cp_host, i2cp_port
         self._sid = None
-        self._lookup = lookup
+        # unused
+        self._lookup = None
         self._done = False
         self.dest = None
         self._connected = False
@@ -130,17 +131,19 @@ class Connection(object):
     def open(self):
         """
         open session to i2p router
+        :return: a future that completes after connected
         """
         self._log.debug('connecting...')
         tsk = self._async(asyncio.open_connection(self._i2cp_host, self._i2cp_port, loop=self._loop))
         tsk.add_done_callback(self._cb_connected)
+        return tsk
         
     def generate_dest(self, keyfile):
         if not os.path.exists(keyfile):
             datatypes.destination.generate_dsa(keyfile)
         self.dest = datatypes.destination.load(keyfile)
 
-    def lookup_async(self, name, ftr):
+    def _lookup_async(self, name, ftr):
         """
         lookup name asynchronously
         """
@@ -230,6 +233,17 @@ class Connection(object):
         else:
             self._log.error('could not connect to i2p router')
 
+    @asyncio.coroutine
+    def lookup(self, name):
+        """
+        lookup a name
+        :param name: the name
+        yields none on error otherwise the destination as a datatype.destination
+        """
+        ftr = asyncio.Future(loop=self._loop)
+        self._async(self._lookup_async(name, ftr))
+        yield from ftr
+        
     @asyncio.coroutine
     def _send_raw(self, data):
         """
@@ -345,6 +359,8 @@ class Connection(object):
                 self._log.debug('got dest: {}'.format(msg.dest))
                 if not ftr.done():
                     ftr.set_result(msg.dest)
+            else:
+                ftr.set_result(None)
             self._host_lookups.pop(msg.rid)
         raise Return()
             
@@ -388,7 +404,7 @@ class Connection(object):
         ftr = asyncio.Future(loop=self._loop)
 
         if not isinstance(dest, datatypes.destination):
-            self._loop.call_soon(self.lookup_async, dest, ftr)
+            self._loop.call_soon(self._lookup_async, dest, ftr)
         else:
             self._log.debug('sending dgram to {}'.format(dest.base32()))
             dgram = dgram_class(dest=self.dest, payload=data)

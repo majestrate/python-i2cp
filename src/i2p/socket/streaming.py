@@ -142,7 +142,7 @@ class packet:
             self._log.warn("packet not verified, not implemented")
             return True
         else:
-            return False
+            return True
 
     def is_syn(self):
         """
