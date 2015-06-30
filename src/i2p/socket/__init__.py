@@ -87,7 +87,7 @@ The i2p.socket module comes with an asyncio like interface
     r, w = yield from async.open_connection("psi.i2p", 80)
 
     # send it!
-    w.write(b'GET / HTTP/1.0\r\n')
+    w.write(b'GET / HTTP/1.0\\\r\\\n')
     _ = yield from w.drain()
 
     # receive it!
@@ -105,3 +105,41 @@ All this and more available now on pypi now.
 
 Install today!
 """
+
+from .socket import *
+from .exceptions import error, herror, gaierror, timeout
+
+
+_interface = None
+
+def get_default_interface():
+    """
+    :return: our default i2cp interface
+    """
+    global _interface
+    if _interface is None:
+        _interface = create_interface()
+    return _interface
+
+
+def socket(af=AF_I2CP, type=SOCK_STREAM, flags=None):
+    """
+    :param af: must be i2p.socket.AF_I2CP for now, in the future it could be i2p.socket.AF_SAM
+    :param type: i2p.socket.SOCK_*
+    :param flags: unused
+    """
+    if af == AF_I2CP:
+        return get_default_interface().socket(af, type, flags)
+    elif af == AF_SAM:
+        raise NotImplemented()
+    else:
+        raise Exception("invalid address family: {}".format(af))
+
+def create_connection(address, timeout=30, source_address=None):
+    """
+    socket.create_connection stub for i2p.socket
+    :param address: (host, port) tuple
+    :param timeout: connection timeout
+    :param source_address: unused
+    """
+    return get_default_interface().connect(address, timeouut, source_address)

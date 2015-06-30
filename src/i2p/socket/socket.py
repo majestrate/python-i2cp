@@ -1,42 +1,90 @@
 from i2p.i2cp import client
 from i2p.i2cp import crypto 
 from i2p.i2cp import datatypes 
-from i2p.i2cp import exceptions  
 from i2p.i2cp import util 
-from i2p.socket import streaming 
 
+from i2p.socket import exceptions  
+
+
+import functools
 import logging
 import queue
 import threading
+import time
+import os
 
 import trollius as asyncio
 from trollius import Return, From
+from enum import Enum
 
-from i2p.socket import firewall
+import defaults
+import firewall
+import streaming
 
+
+_log = logging.getLogger("i2p.socket.socket")
 
 SOCK_STREAM = datatypes.i2cp_protocol.STREAMING
 SOCK_DGRAM = datatypes.i2cp_protocol.DGRAM
 SOCK_RAW = datatypes.i2cp_protocol.RAW
 
-class SocketEndpoint(client.I2CPHandler):
+class _SocketFamily(Enum):
+    # unused for now
+    SAM = 9000
+    # it's over 9000!
+    I2CP = 9001
+
+AF_SAM = _SocketFamily.SAM
+AF_I2CP = _SocketFamily.I2CP
+
+class _SocketEndpoint(client.I2CPHandler):
 
     _log = logging.getLogger("i2p.socket.SocketEndpoint")
     
-    def __init__(self, rules=None, loop=None):
+    def __init__(self, rules=None, loop=None, streaming_opts=defaults.streaming_options()):
         """
         :param rules: firewall rules
         :param connection_handler_class: class to use for handling connections
         """
+        self._streaming_opts = streaming_opts
         self._handlers = dict()
         self._rules = rules or firewall.DefaultRule()
         self._i2cp = None
         if loop is None:
             loop = asyncio.new_event_loop()
+            # just run it
+            threading.Thread(target=loop.run_forever).start()
+            self._log.info("using new event loop")
         self._loop = loop
         # sid -> pipe send fd
         self._send_to_user_fds = dict()
-
+        
+    def lookup(self, name, tries=1):
+        """
+        try to look up a name, will block until session is made
+        :param name: the name to look up
+        :param tries: the number of times to try
+        """
+        self._log.info("lookup {} try {}".format(name, tries))
+        # wait until we are connected
+        while not self.is_connected():
+            self._log.info("wait for connection")
+            time.sleep(1)
+        while True:
+            if tries > 0:
+                self._log.debug("try lookup")
+                ftr = asyncio.Future(loop=self._i2cp._loop)
+                self._i2cp.lookup_async(name, ftr)
+                while not ftr.done():
+                    self._log.debug("wait for reply")
+                    time.sleep(1)
+                dest = ftr.result()
+                if dest is None:
+                    tries -= 1
+                else:
+                    return dest
+            else:
+                raise exceptions.gaierror()
         
     def is_connected(self):
         """
@@ -50,7 +98,16 @@ class SocketEndpoint(client.I2CPHandler):
         """
         if self._i2cp is not None:
             return self._i2cp.opts
-    
+
+    def up(self):
+        """
+        put the interface up
+        wait for the session to be ready
+        """
+        while self._i2cp is None:
+            time.sleep(1)
+        self.dest = self._i2cp.dest
+            
     @asyncio.coroutine
     def session_made(self, con):
         self._i2cp = con
@@ -68,10 +125,11 @@ class SocketEndpoint(client.I2CPHandler):
         _log.info("got {} bytes datagram from {} srcport={} dstport={}".format(len(data), dest, srcport, dstport))
 
     @asyncio.coroutine
-    def got_packet(self, pkt, srcport, dstport):
+    def got_packet(self, data, srcport, dstport):
         """
         don't call me
         """
+        pkt = streaming.packet(raw=data)
         # check packet signatures as needed
         if not pkt.verify():
             self._log.error("packet verify failed. pkt={} srcport={} dstport={}".format(pkt, srcport, dstport))
@@ -79,7 +137,7 @@ class SocketEndpoint(client.I2CPHandler):
         # if this is a sync packet add a connection handler for it if it's allowed by firewall
         if pkt.is_syn():
             if not self.rules.allow_ib():
-                self._log.error("drop unwarrened inbound connection attempt")
+                self._log.warn("drop unwarrened inbound connection attempt")
                 raise Return()
             fromdest = pkt.get_from()
             if fromdest is None:
@@ -120,10 +178,11 @@ class SocketEndpoint(client.I2CPHandler):
         if pkt_from_dest is None:
             self._log.error("anonymous syn packet, pkt={} srcport={} dstport={}".format(pkt, theirport, ourtport))
         else:
-            self._handlers[pkt.recv_sid] = SocketState(self.get_loop(),
-                                                       functools.partial(self._stream_recv, pkt.recv_sid),
-                                                       lambda packet : self._i2cp.send_packet(pkt_from_dest, packet, thierport, ourport)
-                                                       self._new_sid, self._streaming_opts)
+            self._handlers[pkt.recv_sid] = _SocketState(self._loop,
+                                                        pkt_from_dest,
+                                                        functools.partial(self._stream_recv, pkt.recv_sid),
+                                                        self._i2cp,
+                                                        self._new_sid, self._streaming_opts)
             
     def _new_sid(self):
         """
@@ -143,67 +202,116 @@ class SocketEndpoint(client.I2CPHandler):
         return self._handlers[pkt.recv_sid]
 
 
-    def _stream_recv(self, recv_sid, data):
-        fd = self._send_to_user_fd[recv_sid]
-        # write to pipe
-        # probably dangerous
-        os.write(fd, data)
+    def _stream_recv(self, sid, data):
+        """
+        :param sid: stream id
+        :param data: the data to recv or None if this is eof
+        """
+        if data:
+            # get the pipe fd 
+            fd = self._send_to_user_fds[sid]
+            # write to pipe
+            self._log.debug("os.write({}) -> {}".format(fd, sid))
+            # probably dangerous
+            os.write(fd, data)
+        else:
+            # this is the end of stream
+            # deregister everything
+            self._log.debug("close stream {}".format(sid))
+            self.close_socket(sid)
 
 
+    def close_socket(self, sid):
+        """
+        deregister/close all resources for a stream
+        :param sid: the stream's id
+        """
+        fd = self._send_to_user_fds.pop(sid)
+        self._log.debug("os.close({}) -> {}".format(fd, sid))
+        # TODO: does this work right? will existing data be recv'd right?
+        os.close(fd)
+        handler = self._handlers.pop(sid)
+        
     def _register_socket_stream(self, sid, write_fd):
         """
         register a stream id to write to a file descriptor
         :param sid: stream id
         :param write_fd: a fileno that can be written to with os.write for sending results to user
         """
-        if sid in self._send_to_user_fd:
+        if sid in self._send_to_user_fds:
             raise Exception("cannot register socket because it already is registered")
-        self._send_to_user_fd[sid] = write_fd
+        self._send_to_user_fds[sid] = write_fd
         
-    def connect(self, dest, port):
+    def stream_socket(self):
         """
-        create a new outbound connection to destination
+        create a new streaming socket over i2p that is not bound or connected to anyone
         """
         sid = self._new_sid()
-        handler = SocketState(self.get_loop(),
-                              functools.partial(self._stream_recv, sid),
-                              lambda packet : self._i2cp.send_packet(dest, packet, port, our_port),
-                              lambda : sid,
-                              self._streaming_opts)
+        # create the socket state
+        handler = _SocketState(self._loop,
+                               None,
+                               functools.partial(self._stream_recv, sid),
+                               self._i2cp,
+                               lambda : sid,
+                               self._streaming_opts)
+        # new pipe for recv-ing data
         r, w = os.pipe()
+        # give write fd to socket state
         self._register_socket_stream(sid, w)
-        return _OutboundSocket(self, sid, r, handler.send)
-        
-    def get_loop(self):
-        """
-        get event loop belonging to this endpoint
-        don't call
-        """
-        return self._loop
+        # give read fd to socket wraper
+        return _StreamSocket(self, handler, r)
 
     def close(self):
         """
         close this endpoint, call when we're done using sockets from this guy
         """
         if self._i2cp:
+            # if we are connected then close the i2cp session
             self._log.info("closing interface")
             # close connection
             self._i2cp.close()
-            # close event loop
-            # XXX: should we?
-            self._loop.close()
-
-class SocketState:
+            # we no longer have an i2cp session
+            self._i2cp = None
+        # if the event loop is already closed we're gud
+        if self._loop.is_closed():
+            return
+        # stop the event loop
+        self._loop.stop()
+        # wait for it to end
+        while self._loop.is_running():
+            time.sleep(0.1)
+        # close it
+        self._loop.close()
+        
+    def socket(self, af=AF_I2CP, type=SOCK_STREAM, flags=None):
+        """
+        create a new socket object that uses i2cp
+        :param af: address family, must be AF_I2CP
+        """
+        if af != AF_I2CP:
+            raise Exception("cannot use address family {}".format(af))
+        if type == SOCK_STREAM:
+            return self.stream_socket()
+        elif type == SOCK_DGRAM:
+            return self.dgram_socket()
+        elif type == SOCK_RAW:
+            return self.raw_socket()
+        
+    def __del__(self):
+        self.close()
+        
+class _SocketState:
     """
     state of a single connection between destinations
     """
 
     _log = logging.getLogger("i2p.socket.SocketState")
-
-    def __init__(self, loop, recv_func, send_func, new_sid, opts):
+    
+    def __init__(self, loop, dest, recv_func, i2cp_conn, new_sid, opts):
         """
         :param recv_func: a function that takes 1 bytearray, sends received data to user, must not block
-        :param send_func: a function that sends a streaming packet to the correct endpoint, takes 1 parameter, the packet
+        :param dest: i2p.i2cp.datatypes.destination object of who we are talking to
+        :param i2cp_conn: the underlying i2cp session connection
         :param new_sid: generate an new unused sid for this socket to use when replying to syn
         :param opts: streaming options
         """
@@ -212,7 +320,7 @@ class SocketState:
         self._loop = loop
         # callbacks
         self._recv = recv_func
-        self._send = send_func
+        self._i2cp = i2cp_conn
         # stream ids
         self._send_sid = 0
         self._recv_sid = 0
@@ -222,10 +330,32 @@ class SocketState:
         self._pending_send = dict()
         self._pending_acks = dict()
 
+        # tcp backoff
         self._backoff = 0.1
+
+        self._remote_connected = False
+        self._opts = opts
+        # default mtu
+        self._mtu = self._opt_int("maxMessageSize")
+        # XXX: this isn't right
+        self._ack_timeout = 6
+
+        self._segments = list()
+        self.remote_dest = dest
+
+        # times
+        self._started_at = util.now()
+        self._connected_at = 0
         
+    def _opt_int(self, shortname):
+        """
+        :param shortname: the name of the option, it will be prefixed with 'i2p.streaming'
+        :return: int or None if it's not defined
+        """
+        name = 'i2p.streaming.{}'.format(shortname)
+        if name in self._opts:
+            return int(self._opts[name])
         
-    # TODO: coroutine?
     def got_packet(self, pkt):
         """
         recvieve a packet
@@ -234,6 +364,13 @@ class SocketState:
         don't call externally
         """
         self._log.debug("got a packet {}".format(pkt))
+        # check packet signatures if they exist
+        if not pkt.verify(self.remote_dest):
+            # report error and return if invalid
+            self._log.error("packet signature invalid: {}".format(pkt))
+            return
+        # record that we got a packet
+        self._last_recv = util.now()
         if pkt.is_syn():
             # this is a syn packet
             # handle it
@@ -246,15 +383,9 @@ class SocketState:
             # this packet is emtpy?
             self._log.info("empty packet {}".format(pkt))
         else:
+            # recv segment
             self._recv_pkt(pkt)
 
-    def _make_packet(self, data, ack_thru=0):
-        """
-        create a new packet to be sent, ease of use function
-        """
-        return streaming.packet(self._send_sid, self._recv_sid, self._seqno, ack_thru, payload=data)
-
-    
     def send(self, data):
         """
         send data to endpoint in order
@@ -262,30 +393,165 @@ class SocketState:
         :return: how much was sent
         """
         sent = 0
-        self._log.debug("send {} bytes".foramt(len(data)))
-        while len(data) > self.mtu:
-            sent += self._queue_send(data[:self.mtu])
-            data = data[:self.mtu]
-        sent += self._queue_send(data)
+        self._log.debug("send {} bytes".format(len(data)))
+        while len(data) > self._mtu:
+            sent += self._queue_segment(data[self._mtu:])
+            data = data[:self._mtu]
+        sent += self._queue_segment(data)
+        if self._remote_connected:
+            # backoff if we are connected
+            self._log.debug("backoff {}".format(self._backoff))
+            time.sleep(self._backoff)
+        if self.remote_timeout():
+            # if we timed out raise exception
+            raise exceptions.timeout()
         return sent
 
-    def _queue_send(self, data):
+    def _queue_segment(self, data):
         """
-        queue segment data less than or equal to the mtu to be sent
-        add timeout callbacks
+        queue an entire segment for sending
+        :param data: the data in the segment
+        """
+        self._log.debug("queue {} bytes".format(len(data)))
+        self._segments.append(data)
+        return len(data)
+        
+        
+    def _send_segment(self, sign=False):
+        """
+        send the next queued segment
+        :param sign: do we sign this packet
         :return: how much we sent
         """
-        # backoff
-        self._log.debug("backoff {}".format(self._backoff))
-        time.sleep(self._backoff)        
-        self._log.debug("queue send. data={}".format(data))
-        # regular tcp data segment
-        pkt = self._make_packet(data)
-        tsk = self._loop.call_later(self.send_timeout, self._send_expired, pkt)
+        # get the latest segment
+        data = self._segments.pop(0)
+        # sanity
+        assert len(data) <= self._mtu
+        self._log.debug("send segment. data={}".format(data))
+        pkt = streaming.packet(self._send_sid, self._recv_sid, self._seqno, payload=data)
+        if sign:
+            pkt.sign(self._i2cp.dest)
+        tsk = self._loop.call_later(self._ack_timeout, self._packet_not_acked, pkt)
         self._pending_send[self._seqno] = tsk
         self._seqno += 1
-        self._loop.call_soon_threadsafe(self._send, pkt)
+        self._loop.call_soon_threadsafe(self._send_pkt, pkt)
         return len(data)
+
+    def _packet_not_acked(self, pkt):
+        """
+        called when a packet was not acked in time
+        :param pkt: the packet itself
+        """
+        self._log.warn("packet took too long to be acknowledged: pkt={}".format(pkt))
+        #TODO: packet not acked in time, now what?
+        
+    def begin_connect(self, dest, port):
+        """
+        initiate an outbound connection
+        :param dest: i2p.i2cp.datatypes.destination object
+        :param port: port number
+        """
+        # set remote dest
+        self.remote_dest = dest
+        # set ports
+        self.remote_port = port
+        self.local_port = crypto.random().randint(1, 2 ** 16)
+        # start syn sender
+        delay = self._opt_int("connectDelay")
+        if delay > 0:
+            delay /= 1000.
+            self._log.debug("buffering for {} before initial send".format(delay))
+        else:
+            delay = 0
+        self._loop.call_soon_threadsafe(self._send_syn, delay)
+
+    def block_until_connected(self):
+        """
+        block on this function until we are connected to the remote destination
+        on timeout will raise
+        """
+        if self._opt_int("connectDelay") > 0:
+            self._log.debug("will not block connect because we are delaying syn")
+            return
+        while True:
+            # wait for a bit
+            self._log.debug("blocking for connect")
+            time.sleep(0.1)
+            if self.remote_connected():
+                # we gud yay
+                break
+            elif self.remote_timeout():
+                self._log.warn("connect to {}:{} timed out".format(self.remote_dest.base32(), port))
+                # we timed out
+                raise exceptions.timeout()
+            
+    def _send_syn(self, delay=0, pkt=None):
+        """
+        send our initial syn packet
+        """
+        if self.remote_connected():
+            self._log.debug("we are connected, not sending syn")
+        else:
+            if delay == 0:
+                self._log.debug("sending syn")
+                if pkt is None:
+                    pkt = self._make_syn()
+                self._loop.call_soon_threadsafe(self._send_pkt, pkt)
+                # TODO: make resend interval configurable
+                self._loop.call_later(4, self._send_syn, 0, pkt)
+            else:
+                # delay this
+                self._loop.call_later(delay, self._send_syn, 0)
+            
+    def _make_syn(self):
+        """
+        make our initial syn packet
+        :return: the syn packet we'll send
+        """
+        # new sid
+        self._recv_sid = self._new_sid()
+        # syn flags
+        flags = [streaming.packet_flag.SYNC, streaming.packet_flag.SIG_INC, streaming.packet_flag.FROM_INC]
+        pkt = streaming.packet(recv_sid=self._recv_sid, flags=flags)
+        pkt.set_mtu(self._mtu)
+        # add initial payload stuff
+        pkt.payload = bytearray()
+        # if we have initial data add that in our packet
+        while len(pkt.payload) < self._mtu and len(self._segments) > 0:
+            seg = self._segments.pop(0)
+            # if we add this segment will it be bigger than our mtu?
+            if len(seg) + len(pkt.payload) > self._mtu:
+                # ya let's not add it, break out
+                break
+            # add this segment to the syn
+            pkt.payload += seg
+        pkt.sign(self._i2cp.dest)
+        self._log.debug("our syn packet has {} bytes payload".format(len(pkt.payload)))
+        return pkt
+        
+    def remote_connected(self):
+        """
+        :return: True if we have a fully established handshake with the remote destination
+        """
+        return self._remote_connected
+
+    def remote_timeout(self):
+        """
+        :return: True if the communication with the remote destination has timed out
+        """
+        if self._remote_connected:
+            # we are connected use inactivity timeout
+            return util.now() - self._last_recv > self._opt_int("inactivityTimeout")
+        # we are not connected, use connect timeout
+        return util.now() - self._started_at > self._opt_int("connectTimeout")
+    
+    def _send_pkt(self, pkt):
+        """
+        send a packet to whoever we're talking to
+        """
+        self._log.debug("sending packet {}".format(pkt))
+        # send the packet along its way
+        self._i2cp.send_packet(self.remote_dest, pkt, self.local_port, self.remote_port)
         
     def _send_expired(self, pkt):
         """
@@ -299,7 +565,7 @@ class SocketState:
         """
         handle a packet that isn't a syn or ack
         """
-        
+        #TODO: handle this and deliver it to the user in order
         
     def _got_ack(self, pkt):
         """
@@ -317,90 +583,65 @@ class SocketState:
         """
         we got an incoming connection
         """
+
+        # is this a oneshot messsage?
+        if pkt.is_close():
+            self._recv(pkt.payload)
+            # end of stream
+            self._recv(None)
+            
         self._recv_sid = pkt.recv_sid
         self._send_sid = self._new_sid()
-        
-class _BaseSocket:
+        # set our connection's mtu
+        self._mtu = pkt.get_mtu()
+
+class _StreamSocket:
     """
-    base socket for i2p
+    socket that implements python native tcp socket
     """
 
-    def __init__(self, i2p_router, endpoint):
-        self._router_addr = i2p_router
-        self._endpoint = endpoint
-
-    def connect(self, addr):
-        """
-        connect to a remote address on i2p
-        :param addr: a (hostname, port) tuple
-        """
-        raise NotImplemented()
-        
-    def bind(self, keyfile):
-        """
-        bind a server socket given destination private keys
-        :param keyfile: path to private key file
-        """
-        raise NotImplemented()
-
-    def shutdown(self, *param):
-        """
-        shut down communication
-        :param param: unused
-        """
-        raise NotImplemented()
+    _log = logging.getLogger("i2p.socket.StreamSocket")
     
-    def close(self):
-        """
-        close this connection
-        """
-        raise NotImplemented()
-
-    def send(self, data):
-        """
-        send data to endpoint
-        :param data: bytearray
-        """
-        raise NotImplemented()
-    def recv(self, n):
-        """
-        recv N bytes from endpoint
-        blocks
-        :param n: the number of bytes max to recv
-        """
-        raise NotImplemented()
-
-
-class _OutboundSocket(_BaseSocket):
-
-    def __init__(self, endpoint, sid, fd, send_func):
+    def __init__(self, endpoint, state, fd):
         """
         :param endpoint: the parent endpoint
-        :param sid: the stream id we are using
+        :param state: SocketState
         :param fd: the fileno to poll/select for read
-        :param send_func: the function that sends data to the remote host
         """
         self._fd = fd
         self._endpoint = endpoint
-        self.send = send_func
-        self._sid = sid
+        self._state = state
+        self.send = state.send
 
+    def connect(self, addr):
+        """
+        blocking connect
+        :param addr: (host, port) tuple
+        """
+        self._log.info("resolve address {}".format(addr[0]))
+        dest = self._endpoint.lookup(addr[0], tries=10)
+        self._log.info("connecting to {}:{}".format(dest, addr[1]))
+        self._state.begin_connect(dest, addr[1])
+        self._log.info("waiting for reply from {}".format(addr[0]))
+        self._state.block_until_connected()
+        self._log.info("we are connected to {}:{}".format(addr[0], addr[1]))
+        
     def recv(self, n):
         """
         recv data from remote host, blocks until we read n bytes
         :param n: the number of bytes to recv
         """
-        self._log.debug("sid={} os.read({}) -> {}".format(self._sid, self._fd, n))
+        self._log.debug("os.read({}) -> {}".format(self._fd, n))
         return os.read(self._fd, n)
 
     def close(self):
         """
         close this socket
         """
-        self._log.debug("close({})".format(self._sid))
+        self._log.debug("close()")
         self.shutdown()
         # close file descriptor
-        self._log.debug("fd {} close".format(self._fd))
+        self._log.debug("os.close({})".format(self._fd))
         os.close(self._fd)
 
     def shutdown(self, *args):
@@ -417,21 +658,26 @@ class _OutboundSocket(_BaseSocket):
         """
         return self._fd
 
-_log = logging.getLogger("i2p.socket.socket")
-
-def create_interface(keyfile, i2cp_options={}, i2cp_host='127.0.0.1', i2cp_port=7654):
+def create_interface(keyfile=defaults.keyfile, i2cp_options=defaults.i2cp_options(), i2cp_host=defaults.i2cp_host, i2cp_port=defaults.i2cp_port):
     """
     create an i2p network interface via i2cp
+    :param keyfile: file for private keys
+    :param i2cp_options: i2cp session options
+    :param i2cp_host: i2cp interface address
+    :param i2cp_port: i2cp interface port
+    :return: a new socket endpoint used for creating i2p sockets
     """
+    i2cp_port = int(i2cp_port)
     loop = asyncio.new_event_loop()
-    handler = SocketEndpoint(loop=loop)
-    i2cp_con = client.Connection(handler, session_options, keyfile, i2cp_host, i2cp_port, loop)
+    endpoint_handler = _SocketEndpoint()
+    i2cp_con = client.Connection(endpoint_handler, i2cp_options, keyfile, i2cp_host, i2cp_port, loop)
     _log.info("connecting to router at {}:{}".format(i2cp_host, i2cp_port))
     loop.run_until_complete(i2cp_con.open())
     if i2cp_con.is_connected():
+        _log.info("we connected, forking event loop")
         # fork event loop off into the background
         # XXX: bad idea?
         threading.Thread(target=loop.run_forever).start()
-        return handler
+        return endpoint_handler
     raise Exception("failed to initialize i2p network interface, not connected")
     
