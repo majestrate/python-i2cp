@@ -28,13 +28,13 @@ class Handler(I2CPHandler):
     def _send(self):
         if self.dest is not None:
             self.conn.send_dgram(self.dest, os.urandom(len(self.data)))
-            asyncio.get_event_loop().call_later(1.0, self._send)
+            asyncio.get_event_loop().call_later(0.1, self._send)
         
         
     @asyncio.coroutine
     def session_made(self, conn):
         self.conn = conn
-        self._log.info('session made')
+        self._log.info('session made we are {}'.format(conn.dest))
         asyncio.get_event_loop().call_later(1.0, self._send)
         raise Return()
         
@@ -44,7 +44,7 @@ def main():
     ap.add_argument('--port', type=int, default=7654)
     ap.add_argument('--debug', action='store_const', const=True, default=False)
     ap.add_argument('--keyfile', type=str, default='i2cp.key')
-    ap.add_argument('--dgram', type=str, default='A'*1000)
+    ap.add_argument('--dgram', type=str, default='A'*4000)
     ap.add_argument('--dest', type=str)
 
     args = ap.parse_args()

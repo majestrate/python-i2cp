@@ -15,8 +15,6 @@ from . import crypto
 import trollius as asyncio
 from trollius import From, Return
 
-from i2p.socket import streaming
-
 class I2CPHandler(object):
 
     @asyncio.coroutine
@@ -143,15 +141,16 @@ class Connection(object):
             datatypes.destination.generate_dsa(keyfile)
         self.dest = datatypes.destination.load(keyfile)
 
-    def _lookup_async(self, name, ftr):
+    def lookup_async(self, name, ftr):
         """
         lookup name asynchronously
         """
         self._log.info('async lookup {}'.format(name))
         msg = messages.HostLookupMessage(name=name, sid=self._sid)
-        tsk = self._async(self._send_msg(msg))
         self._host_lookups[msg.rid] = ftr, name
         self._log.debug('put rid {}'.format(msg.rid))
+        self._loop.call_soon_threadsafe(self._async, self._send_msg(msg))
+
         
     def _async(self, coro):
         """
@@ -241,8 +240,8 @@ class Connection(object):
         yields none on error otherwise the destination as a datatype.destination
         """
         ftr = asyncio.Future(loop=self._loop)
-        self._async(self._lookup_async(name, ftr))
-        yield from ftr
+        self._async(self.lookup_async(name, ftr))
+        yield From(ftr)
         
     @asyncio.coroutine
     def _send_raw(self, data):
@@ -269,7 +268,7 @@ class Connection(object):
         if not self._created:
             self._log.info('creating session...')
             msg = messages.CreateSessionMessage(opts=self.opts, dest=self.dest, session_date=datatypes.date())
-            yield From(self._send_msg(msg))
+            self._async(self._send_msg(msg))
         
     @asyncio.coroutine
     def _msg_handle_disconnect(self, msg):
@@ -337,10 +336,9 @@ class Connection(object):
         elif payload.proto == datatypes.i2cp_protocol.RAW:
             self._log.debug('dgram-raw paylod=%s' % [ payload.data ])
             yield From(self.handler.got_dgram(None, payload.data, payload.srcport, payload.dstport))
-        elif payload.proto == datatypes.i2cp_proocol.STREAMING:
+        elif payload.proto == datatypes.i2cp_protocol.STREAMING:
             self._log.debug('streaming payload=%s' % [ payload.data ] )
-            pkt = streaming.packet(raw=payload.data)
-            yield From(self.handler.got_packet(pkt, payload.srcport, payload.dstport))
+            yield From(self.handler.got_packet(payload.data, payload.srcport, payload.dstport))
         else:
             self._log.warn('bad message payload')
             raise Return()
@@ -384,10 +382,10 @@ class Connection(object):
         send a streaming packet to a destination
         """
         self._log.debug('send packet to {}: {}'.format(dest.base32(), packet))
-        p = datatypes.i2cp_payload(proto=dataypes.i2cp_protocol.STREAMING, srcport=srcport, dstport=dstport, data=packet.serialize())
+        p = datatypes.i2cp_payload(proto=datatypes.i2cp_protocol.STREAMING, srcport=srcport, dstport=dstport, data=packet.serialize()).serialize()
         dest = self._check_dest_cache(dest)
         msg = messages.SendMessageMessage(sid=self._sid, dest=dest, payload=p)
-        tsk = self._async(self._send_msg(msg))
+        self._loop.call_soon_threadsafe(self._async, self._send_msg(msg))
         
     def send_raw_dgram(self, dest, data, srcport=0, dstport=0):
         self._async(self._send_dgram(datatypes.raw_datagram, dest, data, srcport, dstport))
@@ -404,7 +402,7 @@ class Connection(object):
         ftr = asyncio.Future(loop=self._loop)
 
         if not isinstance(dest, datatypes.destination):
-            self._loop.call_soon(self._lookup_async, dest, ftr)
+            self._loop.call_soon(self.lookup_async, dest, ftr)
         else:
             self._log.debug('sending dgram to {}'.format(dest.base32()))
             dgram = dgram_class(dest=self.dest, payload=data)

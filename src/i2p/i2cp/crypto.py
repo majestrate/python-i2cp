@@ -3,6 +3,7 @@ from builtins import *
 from Crypto.Hash import SHA, SHA256
 from Crypto.PublicKey import ElGamal, DSA
 from Crypto.Random.random import StrongRandom as random
+from pyelliptic.ecc import ECC
 from .util import *
 from .exceptions import *
 import codecs
@@ -20,7 +21,37 @@ dsa_p = int('9C05B2AA960D9B97B8931963C9CC9E8C3026E9B8ED92FAD0A69CC886D5BF8015FCA
 dsa_q = int('A5DFC28FEF4CA1E286744CD8EED9D29D684046B7', 16)
 dsa_g = int('0C1F4D27D40093B429E962D7223824E0BBC47E7C832A39236FC683AF84889581075FF9082ED32353D4374D7301CDA1D23C431F4698599DDA02451824FF369752593647CC3DDC197DE985E43D136CDCFC6BD5409CD2F450821142A5E6F8EB1C3AB5D0484B8129FCF17BCE4F7F33321C3CB3DBB14A905E7B2B3E93BE4708CBCC82', 16)
 
-# we don't use ElGamal so it's not going to be tested
+
+
+class SigningKey:
+    """
+    base class for signing keys
+    """
+
+    def __init__(self, raw=None, pub=None, priv=None):
+        if raw:
+            # load a key from raw bytes
+            self.load(raw)
+        else:
+            # set the keys directly
+            self.pub = pub
+            self.priv = priv
+
+
+    def sign(self, data):
+        """
+        sign data with private key
+        :param data: bytearray to sign
+        :return: a detached signature
+        """
+
+    def verify(self, data, sig):
+        """
+        verify detached signature for data
+        :param data: bytearray for data that was signed
+        :param sig: bytearray for detached sig
+        :return: True if valid signature otherwise False
+        """
 
 def ElGamalKey(pub=None, priv=None, fd=None):
     """
@@ -99,25 +130,24 @@ def DSAGenerate():
     return DSAKey(y, x)
 
 
-def DSA_SHA1_SIGN(key, data, doublehash=True):
+def DSA_SHA1_SIGN(key, data):
     """
     generate DSA-SHA1 signature
     """
     if key.has_private():
         k = random().randint(1, key.q - 1)
-        if doublehash:
-            data = sha1(data)
+        data = sha1(data)
         R, S =  key.sign(data, k)
         return int(R).to_bytes(20,'big') + int(S).to_bytes(20,'big')
     else:
         raise I2CPException('No Private Key')
 
-def DSA_SHA1_VERIFY(key, data, sig, doublehash=True):
+def DSA_SHA1_VERIFY(key, data, sig):
     """
     verify DSA-SHA1 signature
     """
-    if doublehash:
-        data = sha1(data)
+
+    data = sha1(data)
     R, S = int.from_bytes(sig[:20],'big'), int.from_bytes(sig[20:],'big')
     if not key.verify(data, (R,S)):
         raise I2CPException('DSA_SHA1_VERIFY Failed')
@@ -134,7 +164,6 @@ def dsa_public_key_from_bytes(data):
 def dsa_dump_key(key, fd):
     fd.write(int(key.y).to_bytes(128,'big'))
     fd.write(int(key.x).to_bytes(128,'big'))
-
 
 def gen_dsa_key(fname=None,fd=None):
     dsakey = DSAGenerate()
@@ -166,20 +195,6 @@ def load_keypair(fd):
     sigkey = DSAKey(fd=fd)
     return enckey, sigkey
 
-
-def NaclPublicKey(data):
-    #return nacl.VerifyKey(key=data)
-    pass
-
-def NaclGenerate():
-    #return nacl.SigningKey(nacl.random())
-    pass
-
-def nacl_key_to_public_bytes(key):
-    #if hasattr(key, 'verify_key'):
-    #    key = key.verify_key
-    #return key.encode()
-    pass
 
 if __name__ == '__main__':
     data = b'testdata'

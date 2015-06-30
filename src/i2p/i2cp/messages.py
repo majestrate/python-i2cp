@@ -169,7 +169,7 @@ class CreateSessionMessage(Message):
             _dest = dest.serialize()
             self._log.debug('dest len: %d' % len(_dest))
             opts = datatypes.mapping(self.opts).serialize()
-            self._log.debug('opts: %s' % opts)
+            self._log.debug('opts: {}'.format([opts]))
             data += _dest
             data += opts
             data += session_date

@@ -110,7 +110,7 @@ class destination(object):
 
     @staticmethod
     def parse(data, b64=True):
-        destination._log.debug('dest len=%d' %len(data))
+        destination._log.debug('dest data len=%d' %len(data))
         if b64:
             data = util.i2p_b64decode(data)
         ctype = certificate_type(util.get_as_int(data[384]))
@@ -156,6 +156,10 @@ class destination(object):
         if self.cert.type == certificate_type.NULL:
             return crypto.DSA_SHA1_SIGN(self.sigkey, data)
 
+    def signature_size(self):
+        if self.cert.type == certificate_type.NULL:
+            return 40
+        
 
     def dsa_verify(self, data, sig):
         crypto.DSA_SHA1_VERIFY(self.sigkey, data, sig)
@@ -274,7 +278,7 @@ class mapping(object):
         return self.data
 
     def __str__(self):
-        return str(self.opts)
+        return str([self.opts])
 
 def date(num=None):
     if isinstance(num, bytes):

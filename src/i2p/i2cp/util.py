@@ -3,6 +3,7 @@ from builtins import *
 import base64
 import struct
 import zlib
+import time
 
 BUFFER_SIZE = 1024
 NO_SESSION_ID = 65535
@@ -62,3 +63,4 @@ def i2p_decompress(data):
 def check_portnum(num):
     return isinstance(num, int) and num < 2 ** 16 and num >= 0
 
+now = time.time
