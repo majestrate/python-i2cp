@@ -24,20 +24,20 @@ class Handler(I2CPHandler):
         self._log.info('got dgram from {}:{} to port {} : {}'.format (
             dest, srcport, dstport, [data]))
         raise Return()
-    
+
     def _send(self):
         if self.dest is not None:
             self.conn.send_dgram(self.dest, os.urandom(len(self.data)))
             asyncio.get_event_loop().call_later(0.1, self._send)
-        
-        
+
+
     @asyncio.coroutine
     def session_made(self, conn):
         self.conn = conn
         self._log.info('session made we are {}'.format(conn.dest))
         asyncio.get_event_loop().call_later(1.0, self._send)
         raise Return()
-        
+
 def main():
     ap = AP()
     ap.add_argument('--host', type=str, default='127.0.0.1')
@@ -67,6 +67,6 @@ def main():
         loop.run_forever()
     finally:
         loop.close()
-        
+
 if __name__ == '__main__':
     main()

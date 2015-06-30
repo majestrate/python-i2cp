@@ -26,10 +26,10 @@ def main():
     args = ap.parse_args()
 
     lvl = logging.INFO
-    
+
     if args.debug:
         lvl = logging.DEBUG
-    
+
     logging.basicConfig(level=lvl)
     log = logging.getLogger("i2p.socket")
     log.debug("wait for interface to be up")
@@ -59,7 +59,7 @@ def main():
     finally:
         socket.get_default_interface().close()
 
-    
+
 
 
 if __name__ == '__main__':

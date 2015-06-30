@@ -62,7 +62,7 @@ using the i2cp interface. The i2p.socket module implements python standard
 standard library's socket module's interface so you can drop in i2p.socket with
 as little effort as possible.
 
-    import socket 
+    import socket
     ...
 
 Becomes
@@ -70,10 +70,10 @@ Becomes
     from i2p import socket
     ...
 
-While you still have to use i2p destinations in your code it makes porting your 
+While you still have to use i2p destinations in your code it makes porting your
 python code up to 10 times easier. You can bind multiple incoming destinations,
 connect to other destinations from those destinations persisting the destination
-Or not, It cam be transient. The power is in your hands.These  i2p sockets can 
+Or not, It cam be transient. The power is in your hands.These  i2p sockets can
 be used with the select module as they implement the fileno() method.
 
 BUT WAIT! THERE'S MORE!!
@@ -95,9 +95,9 @@ The i2p.socket module comes with an asyncio like interface
       line = yield from r.readline()
       if len(line) > 0:
         print (line)
-        continue    
+        continue
       break
-    
+
     # close it!
     w.close()
 

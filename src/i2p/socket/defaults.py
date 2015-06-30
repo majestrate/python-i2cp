@@ -30,7 +30,7 @@ def i2cp_options():
     }
     if nick:
         _opts['inbound.nickname'] = nick
-        _opts['outbound.nickname'] = nick 
+        _opts['outbound.nickname'] = nick
     return _opts
 
 def streaming_options():

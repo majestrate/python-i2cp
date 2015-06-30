@@ -102,7 +102,7 @@ class leaseset(object):
         #self.dest.dsa_verify(data, sig, doublehash=False)
         data += sig
         self._log.debug('LS has length %d' % len(data))
-        return data 
+        return data
 
 class destination(object):
 
@@ -159,7 +159,7 @@ class destination(object):
     def signature_size(self):
         if self.cert.type == certificate_type.NULL:
             return 40
-        
+
 
     def dsa_verify(self, data, sig):
         crypto.DSA_SHA1_VERIFY(self.sigkey, data, sig)

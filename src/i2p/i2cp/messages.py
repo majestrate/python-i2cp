@@ -46,7 +46,7 @@ class Message(object):
 
     _log = logging.getLogger('I2CP-Message')
 
-        
+
     @staticmethod
     def parse(fd, parts=True):
         """
@@ -150,7 +150,7 @@ class HostLookupReplyMessage(Message):
             self.dest = None
             if self.code == 0:
                 self.dest = datatypes.destination(raw=self.body[7:],b64=False)
-            
+
         else:
             raise NotImplemented()
 
