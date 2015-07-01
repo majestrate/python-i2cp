@@ -375,7 +375,7 @@ class LeaseSet(object):
 
 
 
-class i2cp_protocol(Enum):
+class I2CPProtocol(Enum):
 
     STREAMING = 6
     DGRAM = 17
@@ -390,7 +390,7 @@ class datagram(object):
 
 class raw_datagram(object):
 
-    protocol = i2cp_protocol.RAW
+    protocol = I2CPProtocol.RAW
 
     def __init__(self, dest=None, raw=None, payload=None):
         if raw:
@@ -405,7 +405,7 @@ class raw_datagram(object):
 
 class dsa_datagram(datagram):
 
-    protocol = i2cp_protocol.DGRAM
+    protocol = I2CPProtocol.DGRAM
     _log = logging.getLogger('datagram-dsa')
 
     def __init__(self, dest=None, raw=None, payload=None):
@@ -448,7 +448,7 @@ class i2cp_payload(object):
 
     _log = logging.getLogger('i2cp_payload')
 
-    def __init__(self, raw=None, data=None, srcport=0, dstport=0, proto=i2cp_protocol.RAW):
+    def __init__(self, raw=None, data=None, srcport=0, dstport=0, proto=I2CPProtocol.RAW):
         if raw:
             self.dlen = struct.unpack(b'>I', raw[:4])[0]
             self._log.debug('payload len=%d' %self.dlen)
@@ -459,7 +459,7 @@ class i2cp_payload(object):
             self.srcport = struct.unpack(b'>H', data[4:6])[0]
             self.dstport = struct.unpack(b'>H', data[6:8])[0]
             self.xflags = data[8]
-            self.proto = i2cp_protocol(util.get_as_int(data[9]))
+            self.proto = I2CPProtocol(util.get_as_int(data[9]))
             self.data = util.i2p_decompress(data[10:])
             self._log.debug('decompressed=%s' % [self.data])
         else:
@@ -469,7 +469,7 @@ class i2cp_payload(object):
                 self._log.debug('compressed payload len=%d' % len(self.data))
                 self.srcport = srcport
                 self.dstport = dstport
-                self.proto = i2cp_protocol(proto)
+                self.proto = I2CPProtocol(proto)
                 self.flags = 0
                 self.xflags = 2
             else:

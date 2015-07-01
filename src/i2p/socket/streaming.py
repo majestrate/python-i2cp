@@ -3,7 +3,7 @@ import logging
 from enum import Enum
 from i2p import crypto, datatypes
 
-class packet_flag(Enum):
+class PacketFlag(Enum):
     SYNC = 1 << 0
     CLOSE = 1 << 1
     RESET = 1 << 2
@@ -22,8 +22,8 @@ def get_flags(flags):
     get a list of flags set given integer
     """
     ret = []
-    for flag in packet_flag.__members__:
-        flag = getattr(packet_flag, flag)
+    for flag in PacketFlag.__members__:
+        flag = getattr(PacketFlag, flag)
         if flags & flag.value == flag.value:
             ret.append(flag)
     return ret
@@ -148,7 +148,7 @@ class packet:
         :param dest: i2p.i2cp.datatypes.Destination
         """
         # set required flags
-        self.set_flags(packet_flag.MAX_PACKET_SIZE, packet_flag.FROM_INC, packet_flag.SIG_INC)
+        self.set_flags(PacketFlag.MAX_PACKET_SIZE, PacketFlag.FROM_INC, PacketFlag.SIG_INC)
         # re initialize options
         self.opts = bytearray()
         # put the from destination
@@ -172,14 +172,14 @@ class packet:
         :param dest: check against this destination if None use the one in the packet if it exists
         :return: true if valid signature or if it has no signature, false if signature fails
         """
-        if packet_flag.SIG_INC in self.flags:
+        if PacketFlag.SIG_INC in self.flags:
             self._log.debug("verify packet signature")
             idx = 0
             # skip over packet size if it's there
-            if packet_flag.MAX_PACKET_SIZE in self.flags:
+            if PacketFlag.MAX_PACKET_SIZE in self.flags:
                 idx += 2
             # get the destination if it's there
-            if packet_flag.FROM_INC in self.flags:
+            if PacketFlag.FROM_INC in self.flags:
                 dest = datatypes.Destination(raw=self.opts[idx:])
                 idx += len(dest)
             # make sure we got a destination
@@ -205,29 +205,29 @@ class packet:
         """
         :return: if this is an initial incoming syn packet
         """
-        return self.has_flags(packet_flag.FROM_INC, packet_flag.SYNC, packet_flag.SIG_INC) and self.send_sid == 0
+        return self.has_flags(PacketFlag.FROM_INC, PacketFlag.SYNC, PacketFlag.SIG_INC) and self.send_sid == 0
 
     def get_from(self):
         """
         :return: the destination of who sent this packet
         """
         offset = 0
-        if packet_flags.DELAY in self.flags:
+        if PacketFlag.DELAY in self.flags:
             offset += 2
-        if packet_flags.FROM_INC in self.flags:
+        if PacketFlag.FROM_INC in self.flags:
             return datatypes.Destination(raw=self.options[offset:])
 
     def is_rst(self):
         """
         :return: true if this is a reset packet
         """
-        return self.has_flags(packet_flag.FROM_INC, packet_flag.RESET, packet_flag.SIG_INC)
+        return self.has_flags(PacketFlag.FROM_INC, PacketFlag.RESET, PacketFlag.SIG_INC)
 
     def is_close(self):
         """
         :return: true if this is a close packet
         """
-        return self.has_flags(packet_flag.CLOSE, packet_flag.SIG_INC)
+        return self.has_flags(PacketFlag.CLOSE, PacketFlag.SIG_INC)
 
     def set_flags(self, *args):
         """
@@ -242,14 +242,14 @@ class packet:
         set this packet's mtu, assumes it's a syn
         :param mtu: nonzero int < 2 ** 16
         """
-        self.set_flags(packet_flag.MAX_PACKET_SIZE)
+        self.set_flags(PacketFlag.MAX_PACKET_SIZE)
         self._mtu = mtu
 
     def get_mtu(self):
         """
         :return: the connection's mtu declaired in the packet options or the default if not present
         """
-        if self.has_flags(packet_flag.MAX_PACKET_SIZE):
+        if self.has_flags(PacketFlag.MAX_PACKET_SIZE):
             return struct.unpack('>H', self.opts[:2])[0]
         return self._mtu
 
@@ -268,4 +268,4 @@ class packet:
         """
         :return: true if this is a regular ack
         """
-        return self.seqno == 0 and packet_flag.SYNC not in self.flags
+        return self.seqno == 0 and PacketFlag.SYNC not in self.flags

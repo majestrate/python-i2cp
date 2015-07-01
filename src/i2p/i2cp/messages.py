@@ -11,7 +11,7 @@ from . import exceptions
 
 from trollius import From, Return
 
-class message_type(Enum):
+class MessageType(Enum):
     CreateSession = 1
     ReconfigSession = 2
     DestroySession = 3
@@ -40,7 +40,7 @@ class message_type(Enum):
 
 class Message(object):
     """
-    i2cp message
+    I2CP message
     """
 
     _log = logging.getLogger('I2CP-Message')
@@ -56,8 +56,8 @@ class Message(object):
         _data = bytes(fd.read(_len))
         try:
             if parts:
-                return message_type(_type), _data
-            return Message(type=message_type(_type), body=_data), raw + _data
+                return MessageType(_type), _data
+            return Message(type=MessageType(_type), body=_data), raw + _data
         except Exception as e:
             Message._log.error('bad message: %s' % e)
             return None, None
@@ -101,7 +101,7 @@ class GetDateMessage(Message):
             self._log.debug(version)
             body += version
             body += datatypes.Mapping(opts=opts).serialize()
-            Message.__init__(self, type=message_type.GetDate, body=body)
+            Message.__init__(self, type=MessageType.GetDate, body=body)
 
 class HostLookupMessage(Message):
     """
@@ -131,7 +131,7 @@ class HostLookupMessage(Message):
             self._log.debug(name)
             body += struct.pack(b'>B', self.req_type)
             body += name
-            Message.__init__(self, type=message_type.HostLookup, body=body)
+            Message.__init__(self, type=MessageType.HostLookup, body=body)
 
 
     def __str__(self):
@@ -173,7 +173,7 @@ class CreateSessionMessage(Message):
             data += opts
             data += session_date
             data += dest.dsa_sign(data)
-            type = message_type.CreateSession
+            type = MessageType.CreateSession
             Message.__init__(self, type, data)
 
     def __str__(self):
@@ -232,7 +232,7 @@ class CreateLSMessage(Message):
             body += crypto.dsa_private_key_to_bytes(sigkey)
             body += crypto.elgamal_private_key_to_bytes(enckey)
             body += leaseset.serialize()
-            Message.__init__(self, type=message_type.CreateLS, body=body)
+            Message.__init__(self, type=MessageType.CreateLS, body=body)
             self.sid = sid
             self.sigkey = sigkey
             self.enckey = enckey
@@ -250,13 +250,13 @@ class DisconnectMessage(Message):
             Message.__init__(self, raw=raw)
             self.reason = datatypes.String.parse(self.body)
         else:
-            Message.__init__(self, message_type.Disconnect, datatypes.String.create(reason))
+            Message.__init__(self, MessageType.Disconnect, datatypes.String.create(reason))
             self.reason = reason
 
     def __str__(self):
         return '[Disconnect %s]' % self.reason
 
-class session_status(Enum):
+class SessionStatus(Enum):
 
     DESTROYED = 0
     CREATED = 1
@@ -275,7 +275,7 @@ class SessionStatusMessage(Message):
         self.sid = struct.unpack(b'>H', self.body[:2])[0]
         self._log.debug('sid=%d' % self.sid)
         status = util.get_as_int(self.body[2])
-        self.status = session_status(status)
+        self.status = SessionStatus(status)
 
     def __str__(self):
         return '[SessionStatus sid=%d status=%s]' % (self.sid, self.status.name)
@@ -305,7 +305,7 @@ class SendMessageMessage(Message):
         body += dest.serialize()
         body += payload
         body += struct.pack(b'>I', nonce)
-        Message.__init__(self, type=message_type.SendMessage, body=body)
+        Message.__init__(self, type=MessageType.SendMessage, body=body)
         self.sid = sid
         self.dest = dest
         self.payload = payload
@@ -315,7 +315,7 @@ class SendMessageMessage(Message):
         return '[SendMessage nonce=%d sid=%s dest=%s payload=%s]' % ( self.nonce, self.sid, self.dest, self.payload)
 
 
-class message_status(Enum):
+class MessageStatus(Enum):
     AVAILABLE = 0
     ACCEPTED = 1
     BEST_EFFORT_SUCCESS = 2
@@ -349,7 +349,7 @@ class MessageStatusMessage(Message):
             raw = self.body
             self.sid = struct.unpack(b'>H', raw[:2])[0]
             self.mid = struct.unpack(b'>I', raw[2:6])[0]
-            self.status = message_status(util.get_as_int(raw[7]))
+            self.status = MessageStatus(util.get_as_int(raw[7]))
             self.size = struct.unpack(b'>I', raw[7:11])[0]
             self.nonce = struct.unpack(b'>I', raw[11:15])[0]
         else:
@@ -369,17 +369,17 @@ class SetDateMessage(Message):
 
 
 messages = {
-    message_type.CreateSession : CreateSessionMessage,
-    message_type.CreateLS : CreateLSMessage,
-    message_type.SendMessage : SendMessageMessage,
-    message_type.SessionStatus : SessionStatusMessage,
-    message_type.RequestLS : RequestLSMessage,
-    message_type.MessageStatus : MessageStatusMessage,
-    message_type.Disconnect : DisconnectMessage,
-    message_type.MessagePayload : MessagePayloadMessage,
-    message_type.GetDate : GetDateMessage,
-    message_type.SetDate : SetDateMessage,
-    message_type.RequestVarLS : RequestVarLSMessage,
-    message_type.HostLookup : HostLookupMessage,
-    message_type.HostLookupReply : HostLookupReplyMessage,
+    MessageType.CreateSession : CreateSessionMessage,
+    MessageType.CreateLS : CreateLSMessage,
+    MessageType.SendMessage : SendMessageMessage,
+    MessageType.SessionStatus : SessionStatusMessage,
+    MessageType.RequestLS : RequestLSMessage,
+    MessageType.MessageStatus : MessageStatusMessage,
+    MessageType.Disconnect : DisconnectMessage,
+    MessageType.MessagePayload : MessagePayloadMessage,
+    MessageType.GetDate : GetDateMessage,
+    MessageType.SetDate : SetDateMessage,
+    MessageType.RequestVarLS : RequestVarLSMessage,
+    MessageType.HostLookup : HostLookupMessage,
+    MessageType.HostLookupReply : HostLookupReplyMessage,
 }

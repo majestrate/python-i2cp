@@ -57,7 +57,7 @@ class I2CPHandler(object):
         called when the session is done and the i2cp connection has gracefully disconnected
         """
         raise Return()
-        
+
 class PrintDestinationHandler(I2CPHandler):
     """
     a handler that prints our destination and then closes the connection
@@ -109,13 +109,13 @@ class Connection(object):
         # create encryption key for LS per session
         self._enckey = crypto.ElGamalGenerate()
         self._msg_handlers = {
-            messages.message_type.SessionStatus : self._msg_handle_session_status,
-            messages.message_type.RequestLS : self._msg_handle_request_ls,
-            messages.message_type.SetDate : self._msg_handle_set_date,
-            messages.message_type.Disconnect : self._msg_handle_disconnect,
-            messages.message_type.RequestVarLS : self._msg_handle_request_var_ls,
-            messages.message_type.HostLookupReply : self._msg_handle_host_lookup_reply,
-            messages.message_type.MessagePayload : self._msg_handle_message_payload,
+            messages.MessageType.SessionStatus : self._msg_handle_session_status,
+            messages.MessageType.RequestLS : self._msg_handle_request_ls,
+            messages.MessageType.SetDate : self._msg_handle_set_date,
+            messages.MessageType.Disconnect : self._msg_handle_disconnect,
+            messages.MessageType.RequestVarLS : self._msg_handle_request_var_ls,
+            messages.MessageType.HostLookupReply : self._msg_handle_host_lookup_reply,
+            messages.MessageType.MessagePayload : self._msg_handle_message_payload,
         }
         self._dest_cache = dict()
         if evloop is None:
@@ -181,7 +181,7 @@ class Connection(object):
             return
         else:
             _len, _type = struct.unpack(b'>IB', data)
-            _type = messages.message_type(_type)
+            _type = messages.MessageType(_type)
             self._loop.call_soon(self._read_msg, _len, _type, data)
 
 
@@ -337,14 +337,14 @@ class Connection(object):
         handle message payload message
         """
         payload = msg.payload
-        if payload.proto == datatypes.i2cp_protocol.DGRAM:
+        if payload.proto == datatypes.I2CPProtocol.DGRAM:
             self._log.debug('dgram payload=%s' % [ payload.data ])
             dgram = datatypes.dsa_datagram(raw=payload.data)
             yield From(self.handler.got_dgram(dgram.dest, dgram.payload, payload.srcport, payload.dstport))
-        elif payload.proto == datatypes.i2cp_protocol.RAW:
+        elif payload.proto == datatypes.I2CPProtocol.RAW:
             self._log.debug('dgram-raw paylod=%s' % [ payload.data ])
             yield From(self.handler.got_dgram(None, payload.data, payload.srcport, payload.dstport))
-        elif payload.proto == datatypes.i2cp_protocol.STREAMING:
+        elif payload.proto == datatypes.I2CPProtocol.STREAMING:
             self._log.debug('streaming payload=%s' % [ payload.data ] )
             yield From(self.handler.got_packet(payload.data, payload.srcport, payload.dstport))
         else:
@@ -376,7 +376,7 @@ class Connection(object):
         handle session status message
         """
         self._log.info('session status: {}'.format(msg.status))
-        if msg.status == messages.session_status.CREATED:
+        if msg.status == messages.SessionStatus.CREATED:
             self._log.debug('session created')
             self._created = True
             self._sid = msg.sid
@@ -391,7 +391,7 @@ class Connection(object):
         """
         self._log.debug('send packet to {}: {}'.format(dest.base32(), packet))
         pkt_data = packet.serialize()
-        p = datatypes.i2cp_payload(proto=datatypes.i2cp_protocol.STREAMING, srcport=srcport, dstport=dstport, data=pkt_data).serialize()
+        p = datatypes.i2cp_payload(proto=datatypes.I2CPProtocol.STREAMING, srcport=srcport, dstport=dstport, data=pkt_data).serialize()
         dest = self._check_dest_cache(dest)
         msg = messages.SendMessageMessage(sid=self._sid, dest=dest, payload=p)
         self._loop.call_soon_threadsafe(self._async, self._send_msg(msg))
@@ -441,6 +441,6 @@ class Connection(object):
         :return: a future that ends when this connection is done
         """
         return self._done_future
-        
+
     def __del__(self):
         self.close()

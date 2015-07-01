@@ -21,9 +21,9 @@ from enum import Enum
 
 _log = logging.getLogger("i2p.socket.socket")
 
-SOCK_STREAM = datatypes.i2cp_protocol.STREAMING
-SOCK_DGRAM = datatypes.i2cp_protocol.DGRAM
-SOCK_RAW = datatypes.i2cp_protocol.RAW
+SOCK_STREAM = datatypes.I2CPProtocol.STREAMING
+SOCK_DGRAM = datatypes.I2CPProtocol.DGRAM
+SOCK_RAW = datatypes.I2CPProtocol.RAW
 
 class _SocketFamily(Enum):
     # unused for now
