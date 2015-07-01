@@ -5,10 +5,9 @@ import logging
 import random
 import struct
 from enum import Enum
+from i2p import crypto, datatypes
 from . import util
-from . import datatypes
 from . import exceptions
-from . import crypto
 
 from trollius import From, Return
 

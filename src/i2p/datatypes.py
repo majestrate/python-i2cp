@@ -1,7 +1,7 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 from builtins import *
-from . import util
 from . import crypto
+from .i2cp import util
 from enum import Enum
 import logging
 import struct

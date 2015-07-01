@@ -1,8 +1,7 @@
 import struct
 import logging
 from enum import Enum
-from i2p.i2cp import datatypes
-from i2p.i2cp import crypto
+from i2p import crypto, datatypes
 
 class packet_flag(Enum):
     SYNC = 1 << 0

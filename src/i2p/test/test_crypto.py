@@ -1,7 +1,7 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 from builtins import *
 from unittest import TestCase
-from i2p.i2cp import crypto, exceptions
+from i2p import crypto
 
 class TestCrypto(TestCase):
 
@@ -23,7 +23,7 @@ class TestCrypto(TestCase):
 
         try:
             crypto.DSA_SHA1_VERIFY(key, self.data, sig)
-        except exceptions.I2CPException:
+        except crypto.DSAException:
             assert False
         else:
             assert True
@@ -40,7 +40,7 @@ class TestCrypto(TestCase):
 
         try:
             crypto.DSA_SHA1_VERIFY(key, self.data, badsig)
-        except exceptions.I2CPException:
+        except crypto.DSAException:
             assert True
         else:
             assert False

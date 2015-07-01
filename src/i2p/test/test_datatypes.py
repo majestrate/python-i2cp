@@ -1,7 +1,7 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 from builtins import *
 from unittest import TestCase
-from i2p.i2cp import crypto, datatypes
+from i2p import crypto, datatypes
 
 DSA_ELGAMAL_KEY_CERT = b'BQAEAAAAAA=='
 DSA_ELGAMAL_KEY_CERT_PAYLOAD = b'AAAAAA=='

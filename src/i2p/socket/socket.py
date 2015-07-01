@@ -1,6 +1,5 @@
+from i2p import crypto, datatypes
 from i2p.i2cp import client
-from i2p.i2cp import crypto
-from i2p.i2cp import datatypes
 from i2p.i2cp import util
 
 from . import defaults

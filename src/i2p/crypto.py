@@ -4,8 +4,7 @@ from Crypto.Hash import SHA, SHA256
 from Crypto.PublicKey import ElGamal, DSA
 from Crypto.Random.random import StrongRandom as random
 from pyelliptic.ecc import ECC
-from .util import *
-from .exceptions import *
+from i2p.i2cp.util import *
 import codecs
 from enum import Enum
 import math
@@ -236,6 +235,9 @@ def DSAGenerate():
     return DSAKey(y, x)
 
 
+class DSAException(Exception):
+    pass
+
 def DSA_SHA1_SIGN(key, data):
     """
     generate DSA-SHA1 signature
@@ -246,7 +248,7 @@ def DSA_SHA1_SIGN(key, data):
         R, S =  key.sign(data, k)
         return int(R).to_bytes(20,'big') + int(S).to_bytes(20,'big')
     else:
-        raise I2CPException('No Private Key')
+        raise DSAException('No Private Key')
 
 def DSA_SHA1_VERIFY(key, data, sig):
     """
@@ -256,7 +258,7 @@ def DSA_SHA1_VERIFY(key, data, sig):
     data = sha1(data)
     R, S = int.from_bytes(sig[:20],'big'), int.from_bytes(sig[20:],'big')
     if not key.verify(data, (R,S)):
-        raise I2CPException('DSA_SHA1_VERIFY Failed')
+        raise DSAException('DSA_SHA1_VERIFY Failed')
 
 def dsa_public_key_to_bytes(key):
     return int(key.y).to_bytes(128, 'big')

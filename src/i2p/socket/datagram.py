@@ -1,5 +1,5 @@
-from i2p.i2cp.crypto import *
-from i2p.i2cp.datatypes import *
+from i2p.crypto import *
+from i2p.datatypes import *
 from i2p.i2cp.exceptions import *
 from i2p.i2cp.util import *
 

@@ -3,8 +3,8 @@
 #
 
 from future.builtins import *
+from i2p.datatypes import to_b32_bytes
 from i2p.tun import bencode
-from i2p.i2cp.datatypes import to_b32_bytes
 
 from enum import Enum
 
@@ -50,7 +50,7 @@ def packet_is_repl(pkt):
     :return: true if this packet is a reply packet
     """
     return "r" in pkt and pkt["r"] != '0'
-    
+
 def packet_is_ip(pkt, version=6):
     """
     :return: true if this packet is an ip packet of the given version
@@ -80,7 +80,7 @@ def distance(x, y, short=False):
     if short:
         d %= len(x) * 8
     return d
-    
+
 
 def b32_distance(dest_x, dest_y, short=False):
     """
@@ -91,8 +91,8 @@ def b32_distance(dest_x, dest_y, short=False):
     x, y = to_b32_bytes(dest_x), to_b32_bytes(dest_y)
     print(x,y)
     return distance(x, y, short)
-    
-    
+
+
 def test_distance(k1, k2, short, b32=False):
     if b32:
         distance_func = b32_distance
@@ -116,7 +116,7 @@ def test_distance(k1, k2, short, b32=False):
     print ("distance between {} and {}".format([k1], [k1]))
     print (dist(k1, k1))
     print ("")
-    
+
     assert dist(k1, k1) == dist(k2, k2)
     assert dist(k1, k2) == dist(k2, k1)
     assert dist(k1, k1) == 0
@@ -152,6 +152,6 @@ def main():
     test_distance(k1, k2, False, True)
     test_packet(4)
     test_packet(6)
-    
+
 if __name__ == "__main__":
     main()

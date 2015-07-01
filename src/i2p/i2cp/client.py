@@ -6,11 +6,10 @@ import queue
 import socket
 import struct
 import time
+from i2p import crypto, datatypes
 from . import exceptions
 from . import messages
-from . import datatypes
 from . import util
-from . import crypto
 
 import trollius as asyncio
 from trollius import From, Return
