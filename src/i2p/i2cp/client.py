@@ -138,8 +138,8 @@ class Connection(object):
 
     def generate_dest(self, keyfile):
         if not os.path.exists(keyfile):
-            datatypes.destination.generate_dsa(keyfile)
-        self.dest = datatypes.destination.load(keyfile)
+            datatypes.Destination.generate_dsa(keyfile)
+        self.dest = datatypes.Destination.load(keyfile)
 
     def lookup_async(self, name, ftr):
         """
@@ -237,7 +237,7 @@ class Connection(object):
         """
         lookup a name
         :param name: the name
-        yields none on error otherwise the destination as a datatype.destination
+        yields none on error otherwise the destination as a datatype.Destination
         """
         ftr = asyncio.Future(loop=self._loop)
         self._async(self.lookup_async(name, ftr))
@@ -267,7 +267,7 @@ class Connection(object):
         """
         if not self._created:
             self._log.info('creating session...')
-            msg = messages.CreateSessionMessage(opts=self.opts, dest=self.dest, session_date=datatypes.date())
+            msg = messages.CreateSessionMessage(opts=self.opts, dest=self.dest, session_date=datatypes.Date())
             self._async(self._send_msg(msg))
 
     @asyncio.coroutine
@@ -292,10 +292,10 @@ class Connection(object):
         sigkey = self.dest.sigkey
         leases = list()
         for l in msg.leases:
-            l.end_date = datatypes.date((time.time() * 1000) + 600000)
+            l.end_date = datatypes.Date((time.time() * 1000) + 600000)
             leases.append(l)
-        ls = datatypes.leaseset(leases=leases, dest=self.dest, ls_enckey=self._enckey, ls_sigkey=sigkey)
-        self._log.debug('made leaseset: {}'.format(ls))
+        ls = datatypes.LeaseSet(leases=leases, dest=self.dest, ls_enckey=self._enckey, ls_sigkey=sigkey)
+        self._log.debug('made LeaseSet: {}'.format(ls))
         msg = messages.CreateLSMessage(
             sid=self._sid,
             sigkey=dummy_sigkey,
@@ -314,7 +314,7 @@ class Connection(object):
         #TODO: should we regen keys?
         enckey = crypto.ElGamalGenerate()
         sigkey = crypto.DSAGenerate()
-        ls = datatypes.leaseset(leases=[l],dest=self.dest, ls_enckey=enckey, ls_sigkey=sigkey)
+        ls = datatypes.LeaseSet(leases=[l],dest=self.dest, ls_enckey=enckey, ls_sigkey=sigkey)
         msg = messages.CreateLSMessage(
             sid=self._sid,
             sigkey=sigkey,
@@ -401,7 +401,7 @@ class Connection(object):
 
         ftr = asyncio.Future(loop=self._loop)
 
-        if not isinstance(dest, datatypes.destination):
+        if not isinstance(dest, datatypes.Destination):
             self._loop.call_soon(self.lookup_async, dest, ftr)
         else:
             self._log.debug('sending dgram to {}'.format(dest.base32()))

@@ -146,7 +146,7 @@ class packet:
         """
         sign this packet, sets signatures and from destinations
         any previous option data is discarded
-        :param dest: i2p.i2cp.datatypes.destination
+        :param dest: i2p.i2cp.datatypes.Destination
         """
         # set required flags
         self.set_flags(packet_flag.MAX_PACKET_SIZE, packet_flag.FROM_INC, packet_flag.SIG_INC)
@@ -181,7 +181,7 @@ class packet:
                 idx += 2
             # get the destination if it's there
             if packet_flag.FROM_INC in self.flags:
-                dest = datatypes.destination(raw=self.opts[idx:])
+                dest = datatypes.Destination(raw=self.opts[idx:])
                 idx += len(dest)
             # make sure we got a destination
             assert dest is not None
@@ -216,7 +216,7 @@ class packet:
         if packet_flags.DELAY in self.flags:
             offset += 2
         if packet_flags.FROM_INC in self.flags:
-            return datatypes.destination(raw=self.options[offset:])
+            return datatypes.Destination(raw=self.options[offset:])
 
     def is_rst(self):
         """

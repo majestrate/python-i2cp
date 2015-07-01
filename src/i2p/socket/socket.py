@@ -309,7 +309,7 @@ class _SocketState:
     def __init__(self, loop, dest, recv_func, i2cp_conn, new_sid, opts):
         """
         :param recv_func: a function that takes 1 bytearray, sends received data to user, must not block
-        :param dest: i2p.i2cp.datatypes.destination object of who we are talking to
+        :param dest: i2p.i2cp.datatypes.Destination object of who we are talking to
         :param i2cp_conn: the underlying i2cp session connection
         :param new_sid: generate an new unused sid for this socket to use when replying to syn
         :param opts: streaming options
@@ -447,7 +447,7 @@ class _SocketState:
     def begin_connect(self, dest, port):
         """
         initiate an outbound connection
-        :param dest: i2p.i2cp.datatypes.destination object
+        :param dest: i2p.i2cp.datatypes.Destination object
         :param port: port number
         """
         # set remote dest
