@@ -8,6 +8,109 @@ import struct
 import time
 
 
+#
+# Common data types
+#
+
+def Date(num=None):
+    if isinstance(num, bytes):
+        num = struct.unpack(b'>Q', num)[0]
+    if num is None:
+        num = time.time() * 1000
+    num = int(num)
+    return struct.pack(b'>Q', num)
+
+
+class Mapping(object):
+    """
+    i2p dictionary object
+    it sucks
+    """
+
+    _log = logging.getLogger('Mapping')
+
+    def __init__(self, opts=None, raw=None):
+        if raw:
+            self.data = raw
+            self.opts = {}
+            dlen = struct.unpack(b'>H', raw[:2])
+            data = raw[2:2+dlen]
+            while dlen > 0:
+                key = String.parse(data)
+                data = data[len(key)+1:]
+                val = String.parse(data)
+                data = data[len(val)+1:]
+                dlen = len(data)
+                self.opts[key] = val
+        else:
+            self.opts = opts or {}
+            data = bytes()
+            keys = sorted(self.opts.keys())
+            for key in keys:
+                val = bytes(opts[key], 'utf-8')
+                key = bytes(key, 'utf-8')
+                data += String.create(key)
+                data += bytes('=', 'utf-8')
+                data += String.create(val)
+                data += bytes(';', 'utf-8')
+            dlen = len(data)
+            self._log.debug('len of Mapping is %d bytes' % dlen)
+            dlen = struct.pack(b'>H', dlen)
+            self.data = dlen + data
+
+    def serialize(self):
+        return self.data
+
+    def __str__(self):
+        return str([self.opts])
+
+
+class String(object):
+
+    @staticmethod
+    def parse(data):
+        dlen = util.get_as_int(data[0])
+        return bytearray(data[:dlen])
+
+    @staticmethod
+    def create(data):
+        if not isinstance(data, bytes):
+            data = bytearray(data, 'utf-8')
+        dlen = len(data)
+        return struct.pack(b'>B', dlen) + data
+
+
+class SigningKey:
+    """
+    base class for signing keys
+    """
+
+    def __init__(self, raw=None, pub=None, priv=None):
+        if raw:
+            # load a key from raw bytes
+            self.load(raw)
+        else:
+            # set the keys directly
+            self.pub = pub
+            self.priv = priv
+
+
+    def sign(self, data):
+        """
+        sign data with private key
+        :param data: bytearray to sign
+        :return: a detached signature
+        """
+
+    def verify(self, data, sig):
+        """
+        verify detached signature for data
+        :param data: bytearray for data that was signed
+        :param sig: bytearray for detached sig
+        :return: True if valid signature otherwise False
+        """
+
+
 class CertificateType(Enum):
     NULL = 0
     HASHCASH = 1
@@ -34,7 +137,6 @@ class Certificate(object):
         self.type = type
         self._log.debug('type=%s data=%s raw=%s' % (type.name, util.i2p_b64encode(data), self.serialize()))
 
-
     def __str__(self):
         return '[cert type=%s data=%s]' % (self.type.name, self.data)
 
@@ -47,62 +149,10 @@ class Certificate(object):
             data = util.i2p_b64encode(data)
         return data
 
-class LeaseSet(object):
 
-    _log = logging.getLogger('LeaseSet')
-
-    def __init__(self, raw=None, dest=None, ls_enckey=None, ls_sigkey=None, leases=None):
-        if raw:
-            data = raw
-            self.leases = []
-            self.dest = Destination.parse(data)
-            self._log.debug(self.dest)
-            data = data[:len(self.dest)]
-            self.enckey = crypto.ElGamalPublicKey(data[:256])
-            self._log.debug(self.enckey)
-            data = data[256:]
-            self.sigkey = crypto.DSAPublicKey(data[:128])
-            self._log.debug(self.sigkey)
-            data = data[128:]
-            numls = data[0]
-            while numls > 0:
-                _l = data[:44]
-                l = Lease(_l[:32], _l[32:36], _l[36:44])
-                data = data[44:]
-                numls -= 1
-                self.leases.append(l)
-            self.sig = raw[:-40]
-            self.dest.dsa_verify(raw[-40:], self.sig)
-        else:
-            self.dest = dest
-            self.enckey = ls_enckey
-            self.sigkey = ls_sigkey
-            self.leases = list(leases)
-
-    def __str__(self):
-        return '[LeaseSet leases=%s enckey=%s sigkey=%s dest=%s]' % (
-            self.leases,
-            [crypto.elgamal_public_key_to_bytes(self.enckey)],
-            [crypto.dsa_public_key_to_bytes(self.sigkey)],
-            self.dest)
-
-    def serialize(self):
-        """
-        serialize and sign LeaseSet
-        only works with DSA-SHA1 right now
-        """
-        data = bytes()
-        data += self.dest.serialize()
-        data += crypto.elgamal_public_key_to_bytes(self.enckey)
-        data += crypto.dsa_public_key_to_bytes(self.sigkey)
-        data += int(len(self.leases)).to_bytes(1,'big')
-        for l in self.leases:
-            data += l.serialize()
-        sig = crypto.DSA_SHA1_SIGN(self.sigkey, data)
-        #self.dest.dsa_verify(data, sig, doublehash=False)
-        data += sig
-        self._log.debug('LS has length %d' % len(data))
-        return data
+#
+# Common data structures
+#
 
 class Destination(object):
 
@@ -198,20 +248,6 @@ class Destination(object):
     def base64(self):
         return util.i2p_b64encode(self.serialize()).decode('ascii')
 
-class String(object):
-
-    @staticmethod
-    def parse(data):
-        dlen = util.get_as_int(data[0])
-        return bytearray(data[:dlen])
-
-    @staticmethod
-    def create(data):
-        if not isinstance(data, bytes):
-            data = bytearray(data, 'utf-8')
-        dlen = len(data)
-        return struct.pack(b'>B', dlen) + data
-
 
 class Lease(object):
 
@@ -236,57 +272,64 @@ class Lease(object):
         return '[Lease ri=%s tid=%d]' % ([self.ri], self.tid)
 
 
+class LeaseSet(object):
 
-class Mapping(object):
-    """
-    i2p dictionary object
-    it sucks
-    """
+    _log = logging.getLogger('LeaseSet')
 
-    _log = logging.getLogger('Mapping')
-
-    def __init__(self, opts=None, raw=None):
+    def __init__(self, raw=None, dest=None, ls_enckey=None, ls_sigkey=None, leases=None):
         if raw:
-            self.data = raw
-            self.opts = {}
-            dlen = struct.unpack(b'>H', raw[:2])
-            data = raw[2:2+dlen]
-            while dlen > 0:
-                key = String.parse(data)
-                data = data[len(key)+1:]
-                val = String.parse(data)
-                data = data[len(val)+1:]
-                dlen = len(data)
-                self.opts[key] = val
+            data = raw
+            self.leases = []
+            self.dest = Destination.parse(data)
+            self._log.debug(self.dest)
+            data = data[:len(self.dest)]
+            self.enckey = crypto.ElGamalPublicKey(data[:256])
+            self._log.debug(self.enckey)
+            data = data[256:]
+            self.sigkey = crypto.DSAPublicKey(data[:128])
+            self._log.debug(self.sigkey)
+            data = data[128:]
+            numls = data[0]
+            while numls > 0:
+                _l = data[:44]
+                l = Lease(_l[:32], _l[32:36], _l[36:44])
+                data = data[44:]
+                numls -= 1
+                self.leases.append(l)
+            self.sig = raw[:-40]
+            self.dest.dsa_verify(raw[-40:], self.sig)
         else:
-            self.opts = opts or {}
-            data = bytes()
-            keys = sorted(self.opts.keys())
-            for key in keys:
-                val = bytes(opts[key], 'utf-8')
-                key = bytes(key, 'utf-8')
-                data += String.create(key)
-                data += bytes('=', 'utf-8')
-                data += String.create(val)
-                data += bytes(';', 'utf-8')
-            dlen = len(data)
-            self._log.debug('len of Mapping is %d bytes' % dlen)
-            dlen = struct.pack(b'>H', dlen)
-            self.data = dlen + data
-
-    def serialize(self):
-        return self.data
+            self.dest = dest
+            self.enckey = ls_enckey
+            self.sigkey = ls_sigkey
+            self.leases = list(leases)
 
     def __str__(self):
-        return str([self.opts])
+        return '[LeaseSet leases=%s enckey=%s sigkey=%s dest=%s]' % (
+            self.leases,
+            [crypto.elgamal_public_key_to_bytes(self.enckey)],
+            [crypto.dsa_public_key_to_bytes(self.sigkey)],
+            self.dest)
 
-def Date(num=None):
-    if isinstance(num, bytes):
-        num = struct.unpack(b'>Q', num)[0]
-    if num is None:
-        num = time.time() * 1000
-    num = int(num)
-    return struct.pack(b'>Q', num)
+    def serialize(self):
+        """
+        serialize and sign LeaseSet
+        only works with DSA-SHA1 right now
+        """
+        data = bytes()
+        data += self.dest.serialize()
+        data += crypto.elgamal_public_key_to_bytes(self.enckey)
+        data += crypto.dsa_public_key_to_bytes(self.sigkey)
+        data += int(len(self.leases)).to_bytes(1,'big')
+        for l in self.leases:
+            data += l.serialize()
+        sig = crypto.DSA_SHA1_SIGN(self.sigkey, data)
+        #self.dest.dsa_verify(data, sig, doublehash=False)
+        data += sig
+        self._log.debug('LS has length %d' % len(data))
+        return data
+
+
 
 class i2cp_protocol(Enum):
 

@@ -23,36 +23,6 @@ dsa_g = int('0C1F4D27D40093B429E962D7223824E0BBC47E7C832A39236FC683AF84889581075
 
 
 
-class SigningKey:
-    """
-    base class for signing keys
-    """
-
-    def __init__(self, raw=None, pub=None, priv=None):
-        if raw:
-            # load a key from raw bytes
-            self.load(raw)
-        else:
-            # set the keys directly
-            self.pub = pub
-            self.priv = priv
-
-
-    def sign(self, data):
-        """
-        sign data with private key
-        :param data: bytearray to sign
-        :return: a detached signature
-        """
-
-    def verify(self, data, sig):
-        """
-        verify detached signature for data
-        :param data: bytearray for data that was signed
-        :param sig: bytearray for detached sig
-        :return: True if valid signature otherwise False
-        """
-
 def ElGamalKey(pub=None, priv=None, fd=None):
     """
     make ElGamal KeyPair Object
