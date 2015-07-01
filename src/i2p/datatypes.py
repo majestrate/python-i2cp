@@ -325,7 +325,6 @@ class Lease(object):
 
 
 class LeaseSet(object):
-
     _log = logging.getLogger('LeaseSet')
 
     def __init__(self, raw=None, dest=None, ls_enckey=None, ls_sigkey=None, leases=None):

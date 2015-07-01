@@ -51,6 +51,13 @@ class I2CPHandler(object):
         """
         raise Return()
 
+    @asyncio.coroutine
+    def session_done(self):
+        """
+        called when the session is done and the i2cp connection has gracefully disconnected
+        """
+        raise Return()
+        
 class PrintDestinationHandler(I2CPHandler):
     """
     a handler that prints our destination and then closes the connection
@@ -425,6 +432,7 @@ class Connection(object):
         self._reader = None
         self._writer = None
         # we are now done
+        self._async(self.handler.session_done())
         self._done = True
         self._done_future.set_result(True)
 

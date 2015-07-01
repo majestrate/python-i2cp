@@ -158,4 +158,4 @@ def create_connection(address, timeout=30, source_address=None):
     sock = socket(AF_I2CP, SOCK_STREAM)
     return sock.connect(address)
 
-close = lambda : get_default_interface().close()
+close = _close_module_interface
