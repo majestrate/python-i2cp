@@ -232,7 +232,7 @@ class CreateLSMessage(Message):
             body += struct.pack(b'>H', sid)
             body += crypto.dsa_private_key_to_bytes(sigkey)
             body += crypto.elgamal_private_key_to_bytes(enckey)
-            body += LeaseSet.serialize()
+            body += leaseset.serialize()
             Message.__init__(self, type=message_type.CreateLS, body=body)
             self.sid = sid
             self.sigkey = sigkey

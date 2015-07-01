@@ -39,7 +39,7 @@ class _SocketEndpoint(client.I2CPHandler):
 
     _log = logging.getLogger("i2p.socket.SocketEndpoint")
 
-    def __init__(self, rules=None, loop=None, streaming_opts=defaults.streaming_options()):
+    def __init__(self, loop, rules=None , streaming_opts=defaults.streaming_options()):
         """
         :param rules: firewall rules
         :param connection_handler_class: class to use for handling connections
@@ -48,15 +48,17 @@ class _SocketEndpoint(client.I2CPHandler):
         self._handlers = dict()
         self._rules = rules or firewall.DefaultRule()
         self._i2cp = None
-        if loop is None:
-            loop = asyncio.new_event_loop()
-            # just run it
-            threading.Thread(target=loop.run_forever).start()
-            self._log.info("using new event loop")
         self._loop = loop
         # sid -> pipe send fd
         self._send_to_user_fds = dict()
+        self._done_ftr = asyncio.Future(loop=loop)
 
+    def done(self):
+        """
+        :return: a future that finishes when the packet handling is done
+        """
+        return self._done_ftr
+        
     def lookup(self, name, tries=1):
         """
         try to look up a name, will block until session is made
@@ -122,6 +124,13 @@ class _SocketEndpoint(client.I2CPHandler):
         """
         _log.info("got {} bytes datagram from {} srcport={} dstport={}".format(len(data), dest, srcport, dstport))
 
+    @asyncio.coroutine
+    def session_done(self):
+        """
+        don't call me
+        """
+        self._done_ftr.set_result(True)
+        
     @asyncio.coroutine
     def got_packet(self, data, srcport, dstport):
         """
@@ -673,7 +682,8 @@ def create_interface(keyfile=defaults.keyfile, i2cp_options=defaults.i2cp_option
     """
     i2cp_port = int(i2cp_port)
     loop = asyncio.new_event_loop()
-    endpoint_handler = _SocketEndpoint()
+    endpoint_loop = asyncio.new_event_loop()
+    endpoint_handler = _SocketEndpoint(endpoint_loop)
     i2cp_con = client.Connection(endpoint_handler, i2cp_options, keyfile, i2cp_host, i2cp_port, loop)
     _log.info("connecting to router at {}:{}".format(i2cp_host, i2cp_port))
     loop.run_until_complete(i2cp_con.open())
@@ -682,6 +692,7 @@ def create_interface(keyfile=defaults.keyfile, i2cp_options=defaults.i2cp_option
         # fork event loop off into the background
         # XXX: bad idea?
         threading.Thread(target=loop.run_until_complete, args=(i2cp_con.done(),)).start()
+        threading.Thread(target=endpoint_loop.run_until_complete, args=(endpoint_handler.done(),)).start()
         return endpoint_handler
     raise Exception("failed to initialize i2p network interface, not connected")
 

@@ -11,7 +11,6 @@ class TestSocket(TestCase):
         sock = socket.socket()
         sock.connect(("psi.i2p", 80))
         sock.close()
-        socket.close()
 
         
     def test_bind(self):
@@ -20,3 +19,5 @@ class TestSocket(TestCase):
         """
 
         
+    def tearDown(self):
+        socket.close()
