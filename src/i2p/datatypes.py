@@ -128,6 +128,8 @@ class Certificate(object):
         Certificate._log.debug('cert data len=%d' %len(data))
         if b64:
             data = util.i2p_b64decode(data)
+        if len(data) < 3:
+            raise ValueError('invalid Certificate')
         ctype = CertificateType(util.get_as_int(data[0]))
         clen = struct.unpack(b'>H', data[1:3])[0]
         return Certificate(ctype, data[3:3+clen], False)
@@ -213,7 +215,9 @@ class Destination(object):
         Destination._log.debug('dest data len=%d' %len(data))
         if b64:
             data = util.i2p_b64decode(data)
-        cert = Certificate.parse(data[384:])
+        if len(data) < 387:
+            raise ValueError('invalid Destination')
+        cert = Certificate.parse(data[384:], False)
         if cert.type == CertificateType.NULL:
             return crypto.ElGamalPublicKey(data[:256]), crypto.DSAPublicKey(data[256:384]), cert, None
 
