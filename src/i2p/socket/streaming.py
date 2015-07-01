@@ -16,7 +16,7 @@ class packet_flag(Enum):
     PROFILE_INTERACTIVE = 1 << 8
     ECHO = 1 << 9
     NO_ACK = 1 << 10
-    
+
 
 def get_flags(flags):
     """
@@ -53,7 +53,7 @@ class packet:
         (4, 'ack_thru'),
         (1, '_nack_count')
     )
-    
+
     _packet_second = (
         (1, 'resend_delay'),
         (2, 'flags'),
@@ -61,12 +61,12 @@ class packet:
     )
 
     _mtu = 1730
-    
+
     _log = logging.getLogger("streaming-packet")
 
-    def __init__(self, raw=None, 
-                 send_sid=0, recv_sid=0, seqno=0, 
-                 ack_thru=0, nacks=[], resend_delay=0, 
+    def __init__(self, raw=None,
+                 send_sid=0, recv_sid=0, seqno=0,
+                 ack_thru=0, nacks=[], resend_delay=0,
                  flags=[], opts=None, payload=None):
         """
         streaming packet
@@ -105,11 +105,11 @@ class packet:
                 val = struct.unpack(unpstr,part)[0]
                 raw = raw[size:]
                 setattr(self, name, val)
-            
+
             self.opts = raw[:self._opts_len]
             self.payload = raw[self._opts_len:]
             self.flags = get_flags(self.flags)
-    
+
     def serialize(self):
         """
         serialize to bytearray
@@ -134,8 +134,8 @@ class packet:
         data += self.opts
         data += bytearray(self.payload)
         return data
- 
-    def __repr__(self): 
+
+    def __repr__(self):
         attrs = ('flags', 'send_sid', 'recv_sid', 'seqno', 'ack_thru', 'nacks', 'opts', 'payload')
         _str = '[Streaming Packet '
         for attr in attrs:
@@ -146,7 +146,7 @@ class packet:
         """
         sign this packet, sets signatures and from destinations
         any previous option data is discarded
-        :param dest: i2p.i2cp.datatypes.destination
+        :param dest: i2p.i2cp.datatypes.Destination
         """
         # set required flags
         self.set_flags(packet_flag.MAX_PACKET_SIZE, packet_flag.FROM_INC, packet_flag.SIG_INC)
@@ -166,7 +166,7 @@ class packet:
         sig = dest.sign(data)
         self._log.debug("sig is {}".format([sig]))
         self.opts = dest.serialize() + struct.pack('>H', self._mtu) + sig
-        
+
     def verify(self, dest=None):
         """
         verify the signature on this streaming packet if it has one
@@ -181,7 +181,7 @@ class packet:
                 idx += 2
             # get the destination if it's there
             if packet_flag.FROM_INC in self.flags:
-                dest = datatypes.destination(raw=self.opts[idx:])
+                dest = datatypes.Destination(raw=self.opts[idx:])
                 idx += len(dest)
             # make sure we got a destination
             assert dest is not None
@@ -216,8 +216,8 @@ class packet:
         if packet_flags.DELAY in self.flags:
             offset += 2
         if packet_flags.FROM_INC in self.flags:
-            return datatypes.destination(raw=self.options[offset:])
-        
+            return datatypes.Destination(raw=self.options[offset:])
+
     def is_rst(self):
         """
         :return: true if this is a reset packet
@@ -229,7 +229,7 @@ class packet:
         :return: true if this is a close packet
         """
         return self.has_flags(packet_flag.CLOSE, packet_flag.SIG_INC)
-    
+
     def set_flags(self, *args):
         """
         set packet flags if they aren't already set
@@ -253,7 +253,7 @@ class packet:
         if self.has_flags(packet_flag.MAX_PACKET_SIZE):
             return struct.unpack('>H', self.opts[:2])[0]
         return self._mtu
-        
+
     def has_flags(self, *args):
         """
         check if all the given flags are set in this packet

@@ -23,7 +23,7 @@ class I2CPHandler(object):
         called every time we get a valid datagram
         """
         raise Return()
-        
+
     @asyncio.coroutine
     def got_packet(self, pkt, srcport, dstport):
         """
@@ -38,13 +38,13 @@ class I2CPHandler(object):
         :param conn: underlying connection
         """
         raise Return()
-    
+
     @asyncio.coroutine
     def session_refused(self):
         """
         called when the i2p router refuses a session
         """
-    
+
     @asyncio.coroutine
     def disconnected(self, reason):
         """
@@ -56,7 +56,7 @@ class PrintDestinationHandler(I2CPHandler):
     """
     a handler that prints our destination and then closes the connection
     """
-    
+
     def __init__(self, printfunc=None, b32=True):
         """
         :param printfunc: function to use to print our destination
@@ -69,7 +69,7 @@ class PrintDestinationHandler(I2CPHandler):
 
     def _stdout_print(self, *args):
         print (*args)
-            
+
     @asyncio.coroutine
     def session_made(self, conn):
         dest = conn.dest
@@ -78,12 +78,12 @@ class PrintDestinationHandler(I2CPHandler):
         else:
             self._print(dest.base64())
         conn.close()
-    
+
 class Connection(object):
 
     _log = logging.getLogger('I2CP-Connection')
 
-    
+
     def __init__(self, handler, session_options={}, keyfile='i2cp.key', i2cp_host='127.0.0.1', i2cp_port=7654, evloop=None):
         self._i2cp_host, self._i2cp_port = i2cp_host, i2cp_port
         self._sid = None
@@ -118,7 +118,7 @@ class Connection(object):
             self._loop = evloop
         self._done_future = asyncio.Future(loop=self._loop)
         self.generate_dest(self.keyfile)
-        
+
     def is_connected(self):
         return self._connected
 
@@ -137,11 +137,11 @@ class Connection(object):
         tsk = self._async(asyncio.open_connection(self._i2cp_host, self._i2cp_port, loop=self._loop))
         tsk.add_done_callback(self._cb_connected)
         return tsk
-        
+
     def generate_dest(self, keyfile):
         if not os.path.exists(keyfile):
-            datatypes.destination.generate_dsa(keyfile)
-        self.dest = datatypes.destination.load(keyfile)
+            datatypes.Destination.generate_dsa(keyfile)
+        self.dest = datatypes.Destination.load(keyfile)
 
     def lookup_async(self, name, ftr):
         """
@@ -153,18 +153,18 @@ class Connection(object):
         self._log.debug('put rid {}'.format(msg.rid))
         self._loop.call_soon_threadsafe(self._async, self._send_msg(msg))
 
-        
+
     def _async(self, coro):
         """
         do stuff thread safe async
         """
         return self._loop.create_task(coro)
-        
-            
+
+
     def _put_dest_cache(self, name, dest):
         self._log.debug('put dest cache for {}'.format(name))
         self._dest_cache[name] = dest
-        
+
 
     def _cb_recv_msg_hdr(self, ftr):
         """
@@ -177,8 +177,8 @@ class Connection(object):
             _len, _type = struct.unpack(b'>IB', data)
             _type = messages.message_type(_type)
             self._loop.call_soon(self._read_msg, _len, _type, data)
-        
-        
+
+
     def _got_message(self, msgtype, msgbody, msgraw):
         """
         we got a message of tpye with body
@@ -212,7 +212,7 @@ class Connection(object):
             self._log.debug('recv header...')
             tsk = self._async(self._reader.readexactly(5))
             tsk.add_done_callback(self._cb_recv_msg_hdr)
-    
+
     def _begin_session(self):
         """
         begin i2cp session after sending protocol byte
@@ -239,21 +239,21 @@ class Connection(object):
         """
         lookup a name
         :param name: the name
-        yields none on error otherwise the destination as a datatype.destination
+        yields none on error otherwise the destination as a datatype.Destination
         """
         ftr = asyncio.Future(loop=self._loop)
         self._async(self.lookup_async(name, ftr))
         yield From(ftr)
-        
+
     @asyncio.coroutine
     def _send_raw(self, data):
         """
         send raw bytes
         """
         self._writer.write(data)
-        yield From(self._writer.drain()) 
+        yield From(self._writer.drain())
         self._log.info('send %d bytes' % len(data))
-        self._log.debug('--> {}'.format( [data]))       
+        self._log.debug('--> {}'.format( [data]))
 
     @asyncio.coroutine
     def _send_msg(self, msg):
@@ -261,7 +261,7 @@ class Connection(object):
             yield From(self._send_raw(msg.serialize()))
         else:
             self._log.error("_send_msg given None?")
-        
+
     @asyncio.coroutine
     def _msg_handle_set_date(self, msg):
         """
@@ -269,9 +269,9 @@ class Connection(object):
         """
         if not self._created:
             self._log.info('creating session...')
-            msg = messages.CreateSessionMessage(opts=self.opts, dest=self.dest, session_date=datatypes.date())
+            msg = messages.CreateSessionMessage(opts=self.opts, dest=self.dest, session_date=datatypes.Date())
             self._async(self._send_msg(msg))
-        
+
     @asyncio.coroutine
     def _msg_handle_disconnect(self, msg):
         """
@@ -294,10 +294,10 @@ class Connection(object):
         sigkey = self.dest.sigkey
         leases = list()
         for l in msg.leases:
-            l.end_date = datatypes.date((time.time() * 1000) + 600000)
+            l.end_date = datatypes.Date((time.time() * 1000) + 600000)
             leases.append(l)
-        ls = datatypes.leaseset(leases=leases, dest=self.dest, ls_enckey=self._enckey, ls_sigkey=sigkey)
-        self._log.debug('made leaseset: {}'.format(ls))
+        ls = datatypes.LeaseSet(leases=leases, dest=self.dest, ls_enckey=self._enckey, ls_sigkey=sigkey)
+        self._log.debug('made LeaseSet: {}'.format(ls))
         msg = messages.CreateLSMessage(
             sid=self._sid,
             sigkey=dummy_sigkey,
@@ -306,7 +306,7 @@ class Connection(object):
         self._log.debug('made message')
         yield From(self._send_msg(msg))
 
-       
+
     @asyncio.coroutine
     def _msg_handle_request_ls(self, msg):
         """
@@ -316,7 +316,7 @@ class Connection(object):
         #TODO: should we regen keys?
         enckey = crypto.ElGamalGenerate()
         sigkey = crypto.DSAGenerate()
-        ls = datatypes.leaseset(leases=[l],dest=self.dest, ls_enckey=enckey, ls_sigkey=sigkey)
+        ls = datatypes.LeaseSet(leases=[l],dest=self.dest, ls_enckey=enckey, ls_sigkey=sigkey)
         msg = messages.CreateLSMessage(
             sid=self._sid,
             sigkey=sigkey,
@@ -324,7 +324,7 @@ class Connection(object):
             leaseset=ls)
         yield From(self._send_msg(msg))
 
-    
+
     @asyncio.coroutine
     def _msg_handle_message_payload(self, msg):
         """
@@ -344,8 +344,8 @@ class Connection(object):
         else:
             self._log.warn('bad message payload')
             raise Return()
-            
-                
+
+
     @asyncio.coroutine
     def _msg_handle_host_lookup_reply(self, msg):
         """
@@ -363,7 +363,7 @@ class Connection(object):
                 ftr.set_result(None)
             self._host_lookups.pop(msg.rid)
         raise Return()
-            
+
     @asyncio.coroutine
     def _msg_handle_session_status(self, msg):
         """
@@ -389,7 +389,7 @@ class Connection(object):
         dest = self._check_dest_cache(dest)
         msg = messages.SendMessageMessage(sid=self._sid, dest=dest, payload=p)
         self._loop.call_soon_threadsafe(self._async, self._send_msg(msg))
-        
+
     def send_raw_dgram(self, dest, data, srcport=0, dstport=0):
         self._async(self._send_dgram(datatypes.raw_datagram, dest, data, srcport, dstport))
 
@@ -404,7 +404,7 @@ class Connection(object):
 
         ftr = asyncio.Future(loop=self._loop)
 
-        if not isinstance(dest, datatypes.destination):
+        if not isinstance(dest, datatypes.Destination):
             self._loop.call_soon(self.lookup_async, dest, ftr)
         else:
             self._log.debug('sending dgram to {}'.format(dest.base32()))
@@ -412,12 +412,12 @@ class Connection(object):
             p = datatypes.i2cp_payload(data=dgram.serialize(), srcport=srcport, dstport=dstport, proto=dgram_class.protocol)
             msg = messages.SendMessageMessage(sid=self._sid, dest=dest, payload=p.serialize())
             yield From(self._async(self._send_msg(msg)))
-            
+
     def _check_dest_cache(self, dest):
         if dest in self._dest_cache:
             return self._dest_cache[dest]
         return dest
-    
+
     def close(self):
         self._log.debug('closing connection...')
         if self._writer:

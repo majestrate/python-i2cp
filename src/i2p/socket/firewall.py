@@ -33,5 +33,5 @@ class BlockInboundRule(FirewallRule):
 
     def should_drop(self, dest, srcport, dstport):
         return False
-    
+
 DefaultRule = BlockRawRule

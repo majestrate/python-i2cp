@@ -46,7 +46,7 @@ class Message(object):
 
     _log = logging.getLogger('I2CP-Message')
 
-        
+
     @staticmethod
     def parse(fd, parts=True):
         """
@@ -98,10 +98,10 @@ class GetDateMessage(Message):
             raise NotImplemented()
         else:
             body = bytes()
-            version = datatypes.i2p_string.create(version)
+            version = datatypes.String.create(version)
             self._log.debug(version)
             body += version
-            body += datatypes.mapping(opts=opts).serialize()
+            body += datatypes.Mapping(opts=opts).serialize()
             Message.__init__(self, type=message_type.GetDate, body=body)
 
 class HostLookupMessage(Message):
@@ -128,7 +128,7 @@ class HostLookupMessage(Message):
             body += struct.pack(b'>I', self.timeout)
             self.req_type = 1
             self._log.debug(name)
-            name = datatypes.i2p_string.create(name)
+            name = datatypes.String.create(name)
             self._log.debug(name)
             body += struct.pack(b'>B', self.req_type)
             body += name
@@ -149,8 +149,8 @@ class HostLookupReplyMessage(Message):
             self.code = util.get_as_int(self.body[6])
             self.dest = None
             if self.code == 0:
-                self.dest = datatypes.destination(raw=self.body[7:],b64=False)
-            
+                self.dest = datatypes.Destination(raw=self.body[7:],b64=False)
+
         else:
             raise NotImplemented()
 
@@ -168,7 +168,7 @@ class CreateSessionMessage(Message):
             data = bytes()
             _dest = dest.serialize()
             self._log.debug('dest len: %d' % len(_dest))
-            opts = datatypes.mapping(self.opts).serialize()
+            opts = datatypes.Mapping(self.opts).serialize()
             self._log.debug('opts: {}'.format([opts]))
             data += _dest
             data += opts
@@ -197,7 +197,7 @@ class RequestVarLSMessage(Message):
             end_date = raw[:8]
             raw = raw[8:]
             num_ls -= 1
-            self.leases.append(datatypes.lease(ri_hash=ri, tid=tid, end_date=end_date))
+            self.leases.append(datatypes.Lease(ri_hash=ri, tid=tid, end_date=end_date))
         self._log.debug("left overs {}".format([raw]))
 
 class RequestLSMessage(Message):
@@ -210,7 +210,7 @@ class RequestLSMessage(Message):
         numtun = util.get_as_int(raw[2])
         self._log.debug('got %d leases' % numtun)
         raw = raw[3:]
-        ls = datatypes.leaseset(raw)
+        ls = datatypes.LeaseSet(raw)
         for l in ls.leases:
             self.leases.append(l)
         #self._log.debug('left over data: %d bytes' % len(raw))
@@ -232,7 +232,7 @@ class CreateLSMessage(Message):
             body += struct.pack(b'>H', sid)
             body += crypto.dsa_private_key_to_bytes(sigkey)
             body += crypto.elgamal_private_key_to_bytes(enckey)
-            body += leaseset.serialize()
+            body += LeaseSet.serialize()
             Message.__init__(self, type=message_type.CreateLS, body=body)
             self.sid = sid
             self.sigkey = sigkey
@@ -249,9 +249,9 @@ class DisconnectMessage(Message):
     def __init__(self, raw=None, reason='kthnxbai'):
         if raw:
             Message.__init__(self, raw=raw)
-            self.reason = datatypes.i2p_string.parse(self.body)
+            self.reason = datatypes.String.parse(self.body)
         else:
-            Message.__init__(self, message_type.Disconnect, datatypes.i2p_string.create(reason))
+            Message.__init__(self, message_type.Disconnect, datatypes.String.create(reason))
             self.reason = reason
 
     def __str__(self):
