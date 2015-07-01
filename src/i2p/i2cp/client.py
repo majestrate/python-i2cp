@@ -89,6 +89,7 @@ class Connection(object):
         # unused
         self._lookup = None
         self._done = False
+        # our destination
         self.dest = None
         self._connected = False
         self._created = False
@@ -114,6 +115,7 @@ class Connection(object):
             self._loop = asyncio.get_event_loop()
         else:
             self._loop = evloop
+        self._done_future = asyncio.Future(loop=self._loop)
         self.generate_dest(self.keyfile)
 
     def is_connected(self):
@@ -381,7 +383,8 @@ class Connection(object):
         send a streaming packet to a destination
         """
         self._log.debug('send packet to {}: {}'.format(dest.base32(), packet))
-        p = datatypes.i2cp_payload(proto=datatypes.i2cp_protocol.STREAMING, srcport=srcport, dstport=dstport, data=packet.serialize()).serialize()
+        pkt_data = packet.serialize()
+        p = datatypes.i2cp_payload(proto=datatypes.i2cp_protocol.STREAMING, srcport=srcport, dstport=dstport, data=pkt_data).serialize()
         dest = self._check_dest_cache(dest)
         msg = messages.SendMessageMessage(sid=self._sid, dest=dest, payload=p)
         self._loop.call_soon_threadsafe(self._async, self._send_msg(msg))
@@ -423,6 +426,13 @@ class Connection(object):
         self._writer = None
         # we are now done
         self._done = True
+        self._done_future.set_result(True)
 
+    def done(self):
+        """
+        :return: a future that ends when this connection is done
+        """
+        return self._done_future
+        
     def __del__(self):
         self.close()

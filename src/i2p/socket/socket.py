@@ -244,6 +244,9 @@ class _SocketEndpoint(client.I2CPHandler):
         """
         create a new streaming socket over i2p that is not bound or connected to anyone
         """
+        # wait for the interface to be up
+        self.up()
+        # make a new session id
         sid = self._new_sid()
         # create the socket state
         handler = _SocketState(self._loop,
@@ -252,6 +255,8 @@ class _SocketEndpoint(client.I2CPHandler):
                                self._i2cp,
                                lambda : sid,
                                self._streaming_opts)
+        # add the socket state to our handlers
+        self._handlers[sid] = handler
         # new pipe for recv-ing data
         r, w = os.pipe()
         # give write fd to socket state
@@ -419,7 +424,7 @@ class _SocketState:
         """
         send the next queued segment
         :param sign: do we sign this packet
-        :return: how much we sent
+        :return: how many bytes we sent
         """
         # get the latest segment
         data = self._segments.pop(0)
@@ -449,6 +454,8 @@ class _SocketState:
         :param dest: i2p.i2cp.datatypes.Destination object
         :param port: port number
         """
+        # set our sid
+        self._recv_sid = self._new_sid()
         # set remote dest
         self.remote_dest = dest
         # set ports
@@ -506,8 +513,8 @@ class _SocketState:
         make our initial syn packet
         :return: the syn packet we'll send
         """
-        # new sid
-        self._recv_sid = self._new_sid()
+        # set our sid
+        self._send_sid = self._new_sid()
         # syn flags
         flags = [streaming.packet_flag.SYNC, streaming.packet_flag.SIG_INC, streaming.packet_flag.FROM_INC]
         pkt = streaming.packet(recv_sid=self._recv_sid, flags=flags)
@@ -646,9 +653,8 @@ class _StreamSocket:
         """
         shut down stream
         """
-        self._log.debug("shutdown({})".format(self._sid))
         # remove from endpoint
-        self._endpont.close_socket(sid)
+        self._endpoint.close_socket(self._state._recv_sid)
 
     def fileno(self):
         """
@@ -675,7 +681,7 @@ def create_interface(keyfile=defaults.keyfile, i2cp_options=defaults.i2cp_option
         _log.info("we connected, forking event loop")
         # fork event loop off into the background
         # XXX: bad idea?
-        threading.Thread(target=loop.run_forever).start()
+        threading.Thread(target=loop.run_until_complete, args=(i2cp_con.done(),)).start()
         return endpoint_handler
     raise Exception("failed to initialize i2p network interface, not connected")
 

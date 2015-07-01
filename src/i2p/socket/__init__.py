@@ -106,21 +106,31 @@ All this and more available now on pypi now.
 Install today!
 """
 
+import atexit
+
 from .socket import *
 from .exceptions import error, herror, gaierror, timeout
 
 
 _interface = None
 
+def _close_module_interface():
+    global _interface
+    if _interface is None:
+        return
+    _interface.close()
+    _interface = None
+
 def get_default_interface():
     """
-    :return: our default i2cp interface
+    :return: the default i2cp connection used in i2p.socket
     """
     global _interface
     if _interface is None:
         _interface = create_interface()
     return _interface
-
+    
+atexit.register(_close_module_interface)
 
 def socket(af=AF_I2CP, type=SOCK_STREAM, flags=None):
     """
@@ -129,7 +139,10 @@ def socket(af=AF_I2CP, type=SOCK_STREAM, flags=None):
     :param flags: unused
     """
     if af == AF_I2CP:
-        return get_default_interface().socket(af, type, flags)
+        global _interface
+        if _interface is None:
+            _interface = create_interface()
+        return _interface.socket(af, type, flags)
     elif af == AF_SAM:
         raise NotImplemented()
     else:
@@ -142,4 +155,7 @@ def create_connection(address, timeout=30, source_address=None):
     :param timeout: connection timeout
     :param source_address: unused
     """
-    return get_default_interface().connect(address, timeouut, source_address)
+    sock = socket(AF_I2CP, SOCK_STREAM)
+    return sock.connect(address)
+
+close = lambda : get_default_interface().close()
