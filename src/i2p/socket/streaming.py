@@ -82,7 +82,7 @@ class packet:
             self.resend_delay = resend_delay
             self.flags = flags
             self.opts = opts or bytes()
-            self.opts = bytearray(opts)
+            self.opts = bytearray(self.opts)
             self.payload = payload            
         else:
             for size, name in self._packet_first:
@@ -206,7 +206,7 @@ class packet:
         """
         :return: if this is an initial incoming syn packet
         """
-        return self.has_flags(packet_flag.FROM_INC, packet_flag.SYNC, packet_flag.SIG_INC)
+        return self.has_flags(packet_flag.FROM_INC, packet_flag.SYNC, packet_flag.SIG_INC) and self.send_sid == 0
 
     def get_from(self):
         """

@@ -36,8 +36,9 @@ def main():
     # wait for the interface to go up
     socket.get_default_interface().up()
     log.debug(socket.get_default_interface().dest)
-    while args.listen:
-        time.sleep(1)
+    if args.listen:
+        while args.listen:
+            time.sleep(1)
     try:
         log.debug("create socket")
         # make the socket
@@ -46,7 +47,7 @@ def main():
         log.debug("connect")
         sock.connect((args.host, args.port))
         log.debug("send")
-        data = bytes('GET / HTTP/1.1\r\nHost: psi.i2p\r\n\r\n')
+        data = 'GET / HTTP/1.1\r\nHost: {}\r\n\r\n'.format(args.host).encode("utf-8")
         sock.send(data)
         log.debug("sent")
         sock.recv(1024)

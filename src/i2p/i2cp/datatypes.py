@@ -239,7 +239,7 @@ class lease(object):
 
 class mapping(object):
     """
-    i2p dictionary object
+i2p dictionary object
     it sucks
     """
 
