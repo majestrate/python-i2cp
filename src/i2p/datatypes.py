@@ -123,25 +123,26 @@ class Certificate(object):
 
     _log = logging.getLogger('Certificate')
 
-    @staticmethod
-    def parse(data, b64=True):
-        Certificate._log.debug('cert data len=%d' %len(data))
+    def _parse(self, data, b64=True):
+        self._log.debug('cert data len=%d' %len(data))
         if b64:
             data = util.i2p_b64decode(data)
         if len(data) < 3:
             raise ValueError('invalid Certificate')
         ctype = CertificateType(util.get_as_int(data[0]))
         clen = struct.unpack(b'>H', data[1:3])[0]
-        return Certificate(ctype, data[3:3+clen], False)
+        return ctype, data[3:3+clen]
 
-    def __init__(self, type=CertificateType.NULL, data=bytes(), b64=True):
-        if isinstance(type, int) or isinstance(type, CertificateType):
+    def __init__(self, type=CertificateType.NULL, data=bytes(), raw=None, b64=True):
+        if raw:
+            type, data = self._parse(raw, b64)
+        if isinstance(type, int):
             type = CertificateType(type)
         if isinstance(type, str):
             type = type.encode('ascii')
         if isinstance(type, bytes):
             type = CertificateType(type)
-        if b64:
+        if raw is None and b64:
             data = util.i2p_b64decode(data)
         self.data = data
         self.type = type
@@ -164,15 +165,8 @@ class KeyCertificate(Certificate):
 
     _log = logging.getLogger('KeyCertificate')
 
-    @staticmethod
-    def parse(data, b64=True):
-        cert = Certificate.parse(data, b64)
-        if cert.type == CertificateType.KEY:
-            cert = KeyCertificate(cert.data, False)
-        return cert
-
-    def __init__(self, data=bytes(), b64=True):
-        super().__init__(CertificateType.KEY, data, b64)
+    def __init__(self, data=bytes(), raw=None, b64=True):
+        super().__init__(CertificateType.KEY, data, raw, b64)
         if len(self.data) < 4:
             raise ValueError("data too short")
 
@@ -210,14 +204,13 @@ class Destination(object):
 
     _log = logging.getLogger('Destination')
 
-    @staticmethod
-    def parse(data, b64=True):
-        Destination._log.debug('dest data len=%d' %len(data))
+    def _parse(self, data, b64=True):
+        self._log.debug('dest data len=%d' %len(data))
         if b64:
             data = util.i2p_b64decode(data)
         if len(data) < 387:
             raise ValueError('invalid Destination')
-        cert = Certificate.parse(data[384:], False)
+        cert = Certificate(raw=data[384:], b64=False)
         if cert.type == CertificateType.NULL:
             return crypto.ElGamalPublicKey(data[:256]), crypto.DSAPublicKey(data[256:384]), cert, None
 
@@ -248,7 +241,7 @@ class Destination(object):
 
     def __init__(self, enckey=None, sigkey=None, cert=None, raw=None, b64=False, edkey=None):
         if raw:
-            enckey, sigkey, cert, edkey = self.parse(raw, b64)
+            enckey, sigkey, cert, edkey = self._parse(raw, b64)
         self.enckey = enckey
         self.sigkey = sigkey
         self.cert = cert
@@ -331,7 +324,7 @@ class LeaseSet(object):
         if raw:
             data = raw
             self.leases = []
-            self.dest = Destination.parse(data)
+            self.dest = Destination(raw=data)
             self._log.debug(self.dest)
             data = data[:len(self.dest)]
             self.enckey = crypto.ElGamalPublicKey(data[:256])
