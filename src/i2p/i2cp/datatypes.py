@@ -123,8 +123,16 @@ class Certificate(object):
 
     _log = logging.getLogger('Certificate')
 
-    def __init__(self, type=CertificateType.NULL, data=bytes(), b64=True):
+    @staticmethod
+    def parse(data, b64=True):
+        Certificate._log.debug('cert data len=%d' %len(data))
+        if b64:
+            data = util.i2p_b64decode(data)
+        ctype = CertificateType(util.get_as_int(data[0]))
+        clen = struct.unpack(b'>H', data[1:3])[0]
+        return Certificate(ctype, data[3:3+clen], False)
 
+    def __init__(self, type=CertificateType.NULL, data=bytes(), b64=True):
         if isinstance(type, int) or isinstance(type, CertificateType):
             type = CertificateType(type)
         if isinstance(type, str):
@@ -150,6 +158,48 @@ class Certificate(object):
         return data
 
 
+class KeyCertificate(Certificate):
+
+    _log = logging.getLogger('KeyCertificate')
+
+    @staticmethod
+    def parse(data, b64=True):
+        cert = Certificate.parse(data, b64)
+        if cert.type == CertificateType.KEY:
+            cert = KeyCertificate(cert.data, False)
+        return cert
+
+    def __init__(self, data=bytes(), b64=True):
+        super().__init__(CertificateType.KEY, data, b64)
+        if len(self.data) < 4:
+            raise ValueError("data too short")
+
+    @property
+    def sigtype(self):
+        return crypto.SigType.get_by_code(struct.unpack(b'>H', self.data[:2])[0])
+
+    @property
+    def enctype(self):
+        return crypto.EncType.get_by_code(struct.unpack(b'>H', self.data[2:4])[0])
+
+    @property
+    def extra_sigkey_data(self):
+        if len(self.data) <= 4:
+            return None
+        if self.sigtype is None:
+            raise ValueError("unknown sig type")
+        # XXX Assume no extra crypto key data
+        extra = self.sigtype.pubkey_len - 128
+        if extra <= 0:
+            return None
+        return self.data[4:4+extra]
+
+    @property
+    def extra_enckey_data(self):
+        # XXX Assume no extra crypto key data
+        return None
+
+
 #
 # Common data structures
 #
@@ -163,9 +213,7 @@ class Destination(object):
         Destination._log.debug('dest data len=%d' %len(data))
         if b64:
             data = util.i2p_b64decode(data)
-        ctype = CertificateType(util.get_as_int(data[384]))
-        clen = struct.unpack(b'>H', data[385:387])[0]
-        cert = Certificate(ctype, data[387:387+clen])
+        cert = Certificate.parse(data[384:])
         if cert.type == CertificateType.NULL:
             return crypto.ElGamalPublicKey(data[:256]), crypto.DSAPublicKey(data[256:384]), cert, None
 
