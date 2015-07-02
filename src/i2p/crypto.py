@@ -269,7 +269,7 @@ class ElGamalKey(CryptoKey):
         If key is set, creates an ElGamalKey using the provided key.
         If raw is set, creates an ElGamalKey using data parsed from raw.
         """
-        super().__init__(SigType.DSA_SHA1, key, raw)
+        super().__init__(EncType.ELGAMAL_2048, key, raw)
 
     @staticmethod
     def _parse(raw):
