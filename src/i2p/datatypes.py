@@ -367,7 +367,7 @@ class LeaseSet(object):
         data += int(len(self.leases)).to_bytes(1,'big')
         for l in self.leases:
             data += l.serialize()
-        sig = crypto.DSA_SHA1_SIGN(self.sigkey, data)
+        sig = self.dest.dsa_sign(data)
         #self.dest.dsa_verify(data, sig, doublehash=False)
         data += sig
         self._log.debug('LS has length %d' % len(data))
