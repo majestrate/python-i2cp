@@ -163,20 +163,16 @@ class KeyCertificate(Certificate):
 
     @property
     def extra_sigkey_data(self):
-        if len(self.data) <= 4:
-            return None
         if self.sigtype is None:
             raise ValueError("unknown sig type")
         # XXX Assume no extra crypto key data
-        extra = self.sigtype.pubkey_len - 128
-        if extra <= 0:
-            return None
+        extra = max(0, self.sigtype.pubkey_len - 128)
         return self.data[4:4+extra]
 
     @property
     def extra_enckey_data(self):
         # XXX Assume no extra crypto key data
-        return None
+        return bytes()
 
 
 #

@@ -14,8 +14,8 @@ def assert_KeyCert_DSA_ElGamal(cert):
     assert len(cert.data) == 4
     assert cert.sigtype == crypto.SigType.DSA_SHA1
     assert cert.enctype == crypto.EncType.ELGAMAL_2048
-    assert cert.extra_sigkey_data is None
-    assert cert.extra_enckey_data is None
+    assert len(cert.extra_sigkey_data) == 0
+    assert len(cert.extra_enckey_data) == 0
 
 
 class TestKeyCertificate(TestCase):
