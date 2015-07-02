@@ -38,130 +38,6 @@ def sha256(x): return SHA256.new(x).digest()
 
 
 #
-# Algorithms
-#
-
-class EncAlgo(Enum):
-    ELGAMAL = "ElGamal"
-    EC = "EC"
-
-
-class SigAlgo(Enum):
-    DSA = "DSA"
-    EC = "EC"
-    EdDSA = "EdDSA"
-    RSA = "RSA"
-
-
-class EncType(Enum):
-    ELGAMAL_2048 = (0, 256, 256, EncAlgo.ELGAMAL, "ElGamal/None/NoPadding", ELGAMAL_2048_SPEC, "0")
-    EC_P256 = (1, 64, 32, EncAlgo.EC, "EC/None/NoPadding", P256_SPEC, "0.9.20")
-    EC_P384 = (2, 96, 48, EncAlgo.EC, "EC/None/NoPadding", P384_SPEC, "0.9.20")
-    EC_P521 = (3, 132, 66, EncAlgo.EC, "EC/None/NoPadding", P521_SPEC, "0.9.20")
-
-    @property
-    def code(self):
-        return self.value[0]
-
-    @property
-    def pubkey_len(self):
-        return self.value[1]
-
-    @property
-    def privkey_len(self):
-        return self.value[2]
-
-    @property
-    def base_algo(self):
-        return self.value[3]
-
-    @property
-    def algo_name(self):
-        return self.value[4]
-
-    @property
-    def spec(self):
-        return self.value[5]
-
-    @property
-    def since(self):
-        return self.value[6]
-
-    @property
-    def is_available(self):
-        return self.spec is not None
-
-    @staticmethod
-    def get_by_code(code):
-        for enc in EncType:
-            if enc.code == code:
-                return enc
-        return None
-
-
-class SigType(Enum):
-    DSA_SHA1 = (0, 128, 20, 20, 40, SigAlgo.DSA, "SHA-1", "SHA1withDSA", DSA_SHA1_SPEC, "0")
-    ECDSA_SHA256_P256 = (1, 64, 32, 32, 64, SigAlgo.EC, "SHA-256", "SHA256withECDSA", P256_SPEC, "0.9.12")
-    ECDSA_SHA384_P384 = (2, 96, 48, 48, 96, SigAlgo.EC, "SHA-384", "SHA384withECDSA", P384_SPEC, "0.9.12")
-    ECDSA_SHA512_P521 = (3, 132, 66, 64, 132, SigAlgo.EC, "SHA-512", "SHA512withECDSA", P521_SPEC, "0.9.12")
-    RSA_SHA256_2048 = (4, 256, 512, 32, 256, SigAlgo.RSA, "SHA-256", "SHA256withRSA", F4_2048_SPEC, "0.9.12")
-    RSA_SHA384_3072 = (5, 384, 768, 48, 384, SigAlgo.RSA, "SHA-384", "SHA384withRSA", F4_3072_SPEC, "0.9.12")
-    RSA_SHA512_4096 = (6, 512, 1024, 64, 512, SigAlgo.RSA, "SHA-512", "SHA512withRSA", F4_4096_SPEC, "0.9.12")
-    EdDSA_SHA512_Ed25519 = (7, 32, 32, 64, 64, SigAlgo.EdDSA, "SHA-512", "SHA512withEdDSA", Ed25519_SHA_512_SPEC, "0.9.17")
-
-    @property
-    def code(self):
-        return self.value[0]
-
-    @property
-    def pubkey_len(self):
-        return self.value[1]
-
-    @property
-    def privkey_len(self):
-        return self.value[2]
-
-    @property
-    def hash_len(self):
-        return self.value[3]
-
-    @property
-    def sig_len(self):
-        return self.value[4]
-
-    @property
-    def base_algo(self):
-        return self.value[5]
-
-    @property
-    def digest_name(self):
-        return self.value[6]
-
-    @property
-    def algo_name(self):
-        return self.value[7]
-
-    @property
-    def spec(self):
-        return self.value[8]
-
-    @property
-    def since(self):
-        return self.value[9]
-
-    @property
-    def is_available(self):
-        return self.spec is not None
-
-    @staticmethod
-    def get_by_code(code):
-        for enc in SigType:
-            if enc.code == code:
-                return enc
-        return None
-
-
-#
 # Keys
 #
 
@@ -398,6 +274,145 @@ class DSAKey(SigningKey):
         data = sha1(data)
         R, S = int.from_bytes(sig[:20], 'big'), int.from_bytes(sig[20:], 'big')
         return self.key.verify(data, (R, S))
+
+
+#
+# Algorithms
+#
+# Because of the way Enums are instantiated, EncType and SigType must be
+# defined after the Keys they reference.
+#
+
+class EncAlgo(Enum):
+    ELGAMAL = "ElGamal"
+    EC = "EC"
+
+
+class SigAlgo(Enum):
+    DSA = "DSA"
+    EC = "EC"
+    EdDSA = "EdDSA"
+    RSA = "RSA"
+
+
+class EncType(Enum):
+    ELGAMAL_2048 = (0, 256, 256, EncAlgo.ELGAMAL, "ElGamal/None/NoPadding", ELGAMAL_2048_SPEC, "0", ElGamalKey)
+    EC_P256 = (1, 64, 32, EncAlgo.EC, "EC/None/NoPadding", P256_SPEC, "0.9.20", None)
+    EC_P384 = (2, 96, 48, EncAlgo.EC, "EC/None/NoPadding", P384_SPEC, "0.9.20", None)
+    EC_P521 = (3, 132, 66, EncAlgo.EC, "EC/None/NoPadding", P521_SPEC, "0.9.20", None)
+
+    @property
+    def code(self):
+        return self.value[0]
+
+    @property
+    def pubkey_len(self):
+        return self.value[1]
+
+    @property
+    def privkey_len(self):
+        return self.value[2]
+
+    @property
+    def base_algo(self):
+        return self.value[3]
+
+    @property
+    def algo_name(self):
+        return self.value[4]
+
+    @property
+    def spec(self):
+        return self.value[5]
+
+    @property
+    def since(self):
+        return self.value[6]
+
+    @property
+    def cls(self):
+        if self.value[7] is None:
+            raise NotImplementedError('Unsupported encryption type')
+        return self.value[7]
+
+    @property
+    def is_available(self):
+        return self.spec is not None
+
+    @staticmethod
+    def get_by_code(code):
+        for enc in EncType:
+            if enc.code == code:
+                return enc
+        return None
+
+
+class SigType(Enum):
+    DSA_SHA1 = (0, 128, 20, 20, 40, SigAlgo.DSA, "SHA-1", "SHA1withDSA", DSA_SHA1_SPEC, "0", DSAKey)
+    ECDSA_SHA256_P256 = (1, 64, 32, 32, 64, SigAlgo.EC, "SHA-256", "SHA256withECDSA", P256_SPEC, "0.9.12", None)
+    ECDSA_SHA384_P384 = (2, 96, 48, 48, 96, SigAlgo.EC, "SHA-384", "SHA384withECDSA", P384_SPEC, "0.9.12", None)
+    ECDSA_SHA512_P521 = (3, 132, 66, 64, 132, SigAlgo.EC, "SHA-512", "SHA512withECDSA", P521_SPEC, "0.9.12", None)
+    RSA_SHA256_2048 = (4, 256, 512, 32, 256, SigAlgo.RSA, "SHA-256", "SHA256withRSA", F4_2048_SPEC, "0.9.12", None)
+    RSA_SHA384_3072 = (5, 384, 768, 48, 384, SigAlgo.RSA, "SHA-384", "SHA384withRSA", F4_3072_SPEC, "0.9.12", None)
+    RSA_SHA512_4096 = (6, 512, 1024, 64, 512, SigAlgo.RSA, "SHA-512", "SHA512withRSA", F4_4096_SPEC, "0.9.12", None)
+    EdDSA_SHA512_Ed25519 = (7, 32, 32, 64, 64, SigAlgo.EdDSA, "SHA-512", "SHA512withEdDSA", Ed25519_SHA_512_SPEC, "0.9.17", None)
+
+    @property
+    def code(self):
+        return self.value[0]
+
+    @property
+    def pubkey_len(self):
+        return self.value[1]
+
+    @property
+    def privkey_len(self):
+        return self.value[2]
+
+    @property
+    def hash_len(self):
+        return self.value[3]
+
+    @property
+    def sig_len(self):
+        return self.value[4]
+
+    @property
+    def base_algo(self):
+        return self.value[5]
+
+    @property
+    def digest_name(self):
+        return self.value[6]
+
+    @property
+    def algo_name(self):
+        return self.value[7]
+
+    @property
+    def spec(self):
+        return self.value[8]
+
+    @property
+    def since(self):
+        return self.value[9]
+
+    @property
+    def cls(self):
+        if self.value[10] is None:
+            raise NotImplementedError('Unsupported signature type')
+        return self.value[10]
+
+    @property
+    def is_available(self):
+        return self.spec is not None
+
+    @staticmethod
+    def get_by_code(code):
+        for enc in SigType:
+            if enc.code == code:
+                return enc
+        return None
 
 
 def gen_elgamal_key(fname=None, fd=None):
