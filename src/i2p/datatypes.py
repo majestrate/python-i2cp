@@ -326,6 +326,10 @@ class LeaseSet(object):
             self.leases = []
             self.dest = Destination(raw=data)
             self._log.debug(self.dest)
+            # Verify that the signature matches the Destination
+            self.sig = raw[-40:]
+            self.dest.dsa_verify(raw[:-40], self.sig)
+            # Signature matches, now parse the rest
             data = data[:len(self.dest)]
             self.enckey = crypto.ElGamalPublicKey(data[:256])
             self._log.debug(self.enckey)
@@ -340,8 +344,6 @@ class LeaseSet(object):
                 data = data[44:]
                 numls -= 1
                 self.leases.append(l)
-            self.sig = raw[:-40]
-            self.dest.dsa_verify(raw[-40:], self.sig)
         else:
             self.dest = dest
             self.enckey = ls_enckey
