@@ -158,130 +158,260 @@ class SigType(Enum):
         return None
 
 
-def ElGamalKey(pub=None, priv=None, fd=None):
-    """
-    make ElGamal KeyPair Object
-    """
-    if fd is not None:
-        pub = int.from_bytes(fd.read(256), 'big')
-        priv = int.from_bytes(fd.read(256), 'big')
-    if priv:
-        return ElGamal.construct((elgamal_p, elgamal_g, pub, priv))
-    return ElGamal.construct((elgamal_p, elgamal_g, pub))
+#
+# Keys
+#
 
-def ElGamalPublicKey(data=None):
-    """
-    parse ElGamal PublicKey from raw data
-    """
-    return ElGamalKey(int.from_bytes(data,'big'))
+class Key(object):
+    """Base class for keys."""
 
-def ElGamalGenerate():
-    """
-    Generate ElGamal KeyPair
-    """
-    x = random().randint(2, elgamal_p)
-    y = pow(elgamal_g, x, elgamal_p)
-    return ElGamalKey(y, x)
+    def __init__(self, key_type, key=None, raw=None):
+        """Create a key of type key_type.
 
-def gen_elgamal_key(fname=None,fd=None):
+        If key is set, creates a Key using the provided key.
+        If raw is set, creates a Key using data parsed from raw.
+        If neither is set, generates a new Key.
+        """
+        self.key_type = key_type
+        if raw:
+            # load a key from raw bytes
+            key = self._parse(raw)
+        elif key is None:
+            # generate a new key
+            key = self._generate()
+        if isinstance(key, bytes):
+            raise TypeError('Pass in raw key material with the raw= kwarg')
+        self.key = key
 
-    key = ElGamalGenerate()
+    def has_private(self):
+        """Returns True if this Key contains private material, False otherwise."""
+        return self._has_private()
 
-    doclose = fd is None
-    if doclose:
-        fd = open(fname, 'wb')
+    def to_public(self):
+        """Return a copy of this Key without any private key material."""
+        if self.has_private():
+            return self._to_public()
+        else:
+            return self
 
-    fd.write(int(key.y).to_bytes(256, 'big'))
-    fd.write(int(key.x).to_bytes(256, 'big'))
+    def get_pubkey(self):
+        """Get the serialized public key material."""
+        return self._get_pubkey()
 
-    if doclose:
-        fd.close()
+    def get_privkey(self):
+        """Get the serialized private key material."""
+        if not self.has_private():
+            raise TypeError('Private key not available in this object')
+        return self._get_privkey()
 
+    def serialize(self):
+        """Get the serialized public and private key material.
 
-def elgamal_public_key_to_bytes(key):
-    return int(key.y).to_bytes(256, 'big')
-
-def elgamal_private_key_to_bytes(key):
-    return int(key.x).to_bytes(256, 'big')
-
-def DSAKey(pub=None, priv=None, fd=None):
-    """
-    make DSA KeyPair Object
-    """
-    if fd is not None:
-        pub = int.from_bytes(fd.read(128), 'big')
-        priv = int.from_bytes(fd.read(128), 'big')
-    if priv:
-        return DSA.construct((pub, dsa_g, dsa_p, dsa_q, priv))
-    return DSA.construct((pub, dsa_g, dsa_p, dsa_q))
+        This is not necessarily the same as get_pubkey() + get_privkey()
+        """
+        return self._serialize()
 
 
-def DSAPublicKey(data=None):
-    """
-    make DSA KeyPair Object
-    """
-    if data is None:
-        data = b'\x00' * 128
-    y = int.from_bytes(data,'big')
-    return DSAKey(y, None)
+class CryptoKey(Key):
+    """Base class for encryption keys."""
 
-def DSAGenerate():
-    """
-    Generate DSA KeyPair
-    this needs an audit
-    """
-    x = random().randint(1, 2 ** 160)
-    y = pow(dsa_g, x, dsa_p)
-    return DSAKey(y, x)
+    def encrypt(self, plaintext):
+        """Encrypt plaintext with public key.
+
+        :param plaintext: bytearray to encrypt
+        :return: bytearray with cyphertext
+        """
+        return self._encrypt(plaintext)
+
+    def decrypt(self, ciphertext):
+        """Decrypt ciphertext with private key.
+
+        :param ciphertext: bytearray to decrypt
+        :return: bytearray with plaintext
+        """
+        if not self.has_private():
+            raise TypeError('Private key not available in this object')
+        return self._decrypt(ciphertext)
+
+
+class SigningKey(Key):
+    """Base class for signing keys."""
+
+    def sign(self, data):
+        """Sign data with private key.
+
+        :param data: bytearray to sign
+        :return: a detached signature
+        """
+        if not self.has_private():
+            raise TypeError('Private key not available in this object')
+        return self._sign(data)
+
+    def verify(self, data, sig):
+        """Verify detached signature for data.
+
+        :param data: bytearray for data that was signed
+        :param sig: bytearray for detached sig
+        :return: True if valid signature otherwise False
+        """
+        return self._verify(data, sig)
+
+
+class ElGamalKey(CryptoKey):
+
+    def __init__(self, key=None, raw=None):
+        """Construct an ElGamal-2048 encryption key.
+
+        With no arguments, generates a new ElGamalKey.
+        If key is set, creates an ElGamalKey using the provided key.
+        If raw is set, creates an ElGamalKey using data parsed from raw.
+        """
+        super().__init__(SigType.DSA_SHA1, key, raw)
+
+    @staticmethod
+    def _parse(raw):
+        """Parse key data"""
+        if hasattr(raw, 'read'):
+            y = raw.read(256)
+            x = raw.read(256)
+        else:
+            y = raw[:256]
+            x = raw[256:512] if len(raw) == 512 else None
+        y = int.from_bytes(y, 'big')
+        x = int.from_bytes(x, 'big') if x else None
+        return ElGamalKey._construct(y, x)
+
+    @staticmethod
+    def _generate():
+        """Generate an ElGamal key pair.
+
+        This needs an audit.
+        """
+        x = random().randint(2, elgamal_p)
+        y = pow(elgamal_g, x, elgamal_p)
+        return ElGamalKey._construct(y, x)
+
+    @staticmethod
+    def _construct(y, x=None):
+        tup = (elgamal_p, elgamal_g, y, x) if x else (elgamal_p, elgamal_g, y)
+        return ElGamal.construct(tup)
+
+    def _has_private(self):
+        return self.key.has_private()
+
+    def _to_public(self):
+        return ElGamalKey(ElGamalKey._construct(key.y, None))
+
+    def _get_pubkey(self):
+        return int(self.key.y).to_bytes(256, 'big')
+
+    def _get_privkey(self):
+        return int(self.key.x).to_bytes(256, 'big')
+
+    def _serialize(self):
+        data = bytes()
+        data += int(self.key.y).to_bytes(256, 'big')
+        data += int(self.key.x).to_bytes(256, 'big')
+        return data
+
+    def _encrypt(self, plaintext):
+        raise NotImplementedError
+
+    def _decrypt(self, ciphertext):
+        raise NotImplementedError
 
 
 class DSAException(Exception):
     pass
 
-def DSA_SHA1_SIGN(key, data):
-    """
-    generate DSA-SHA1 signature
-    """
-    if key.has_private():
-        k = random().randint(1, key.q - 1)
+
+class DSAKey(SigningKey):
+
+    def __init__(self, key=None, raw=None):
+        """Construct a DSA-SHA1 signing key.
+
+        With no arguments, generates a new DSAKey.
+        If key is set, creates a DSAKey using the provided key.
+        If raw is set, creates a DSAKey using data parsed from raw.
+        """
+        super().__init__(SigType.DSA_SHA1, key, raw)
+
+    @staticmethod
+    def _parse(raw):
+        """Parse key data"""
+        if hasattr(raw, 'read'):
+            y = raw.read(128)
+            x = raw.read(128)
+        else:
+            y = raw[:128]
+            x = raw[128:256] if len(raw) == 256 else None
+        y = int.from_bytes(y, 'big')
+        x = int.from_bytes(x, 'big') if x else None
+        return DSAKey._construct(y, x)
+
+    @staticmethod
+    def _generate():
+        """Generate a DSA key pair.
+
+        This needs an audit.
+        """
+        x = random().randint(1, 2 ** 160)
+        y = pow(dsa_g, x, dsa_p)
+        return DSAKey._construct(y, x)
+
+    @staticmethod
+    def _construct(y, x=None):
+        tup = (y, dsa_g, dsa_p, dsa_q, x) if x else (y, dsa_g, dsa_p, dsa_q)
+        return DSA.construct(tup)
+
+    def _has_private(self):
+        return self.key.has_private()
+
+    def _to_public(self):
+        return DSAKey(DSAKey._construct(key.y, None))
+
+    def _get_pubkey(self):
+        return int(self.key.y).to_bytes(128, 'big')
+
+    def _get_privkey(self):
+        return int(self.key.x).to_bytes(20, 'big')
+
+    def _serialize(self):
+        data = bytes()
+        data += int(self.key.y).to_bytes(128, 'big')
+        # XXX Why is private key padded here?
+        data += int(self.key.x).to_bytes(128, 'big')
+        return data
+
+    def _sign(self, data):
+        """Generate DSA-SHA1 signature."""
+        k = random().randint(1, self.key.q - 1)
         data = sha1(data)
-        R, S =  key.sign(data, k)
+        R, S =  self.key.sign(data, k)
         return int(R).to_bytes(20,'big') + int(S).to_bytes(20,'big')
-    else:
-        raise DSAException('No Private Key')
 
-def DSA_SHA1_VERIFY(key, data, sig):
-    """
-    verify DSA-SHA1 signature
-    """
+    def _verify(self, data, sig):
+        """Verify DSA-SHA1 signature."""
+        data = sha1(data)
+        R, S = int.from_bytes(sig[:20],'big'), int.from_bytes(sig[20:],'big')
+        return self.key.verify(data, (R,S))
 
-    data = sha1(data)
-    R, S = int.from_bytes(sig[:20],'big'), int.from_bytes(sig[20:],'big')
-    if not key.verify(data, (R,S)):
-        raise DSAException('DSA_SHA1_VERIFY Failed')
 
-def dsa_public_key_to_bytes(key):
-    return int(key.y).to_bytes(128, 'big')
-
-def dsa_private_key_to_bytes(key):
-    return int(key.x).to_bytes(20, 'big')
-
-def dsa_public_key_from_bytes(data):
-    return DSAKey(int.from_bytes(data,'big'))
-
-def dsa_dump_key(key, fd):
-    fd.write(int(key.y).to_bytes(128,'big'))
-    fd.write(int(key.x).to_bytes(128,'big'))
+def gen_elgamal_key(fname=None,fd=None):
+    key = ElGamalKey()
+    doclose = fd is None
+    if doclose:
+        fd = open(fname, 'wb')
+    fd.write(key.serialize())
+    if doclose:
+        fd.close()
 
 def gen_dsa_key(fname=None,fd=None):
-    dsakey = DSAGenerate()
+    key = DSAKey()
     nofname = fd is None
     if nofname:
         fd = open(fname, 'wb')
-
-    y, x = dsakey.y , dsakey.x
-    fd.write(int(y).to_bytes(128, 'big'))
-    fd.write(int(x).to_bytes(128, 'big'))
+    fd.write(key.serialize())
     if nofname:
         fd.close()
 
@@ -294,20 +424,14 @@ def gen_keypair(fd):
     gen_dsa_key(fd)
 
 def dump_keypair(enckey, sigkey, fd):
-    fd.write(int(enckey.y).to_bytes(256, 'big'))
-    fd.write(int(enckey.x).to_bytes(256, 'big'))
-    dsa_dump_key(sigkey, fd)
-
-def load_keypair(fd):
-    enckey = ElGamalKey(fd=fd)
-    sigkey = DSAKey(fd=fd)
-    return enckey, sigkey
+    fd.write(enckey.serialize())
+    fd.write(sigkey.serialize())
 
 
 if __name__ == '__main__':
     data = b'testdata'
     print ('generate dsa key...')
-    dkey = DSAGenerate()
+    dkey = DSAKey()
     print ('sign...')
     sig = DSA_SHA1_SIGN(dkey, data)
     print ('verify...')

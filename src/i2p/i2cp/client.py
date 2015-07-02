@@ -295,7 +295,7 @@ class Connection(object):
         handle variable lease set request message
         """
         self._log.debug('handle vls message')
-        dummy_sigkey = crypto.DSAGenerate()
+        dummy_sigkey = crypto.DSAKey()
         #enckey = self.dest.enckey
         sigkey = self.dest.sigkey
         leases = list()
@@ -321,7 +321,7 @@ class Connection(object):
         l = msg.leases[0]
         #TODO: should we regen keys?
         enckey = crypto.ElGamalGenerate()
-        sigkey = crypto.DSAGenerate()
+        sigkey = crypto.DSAKey()
         ls = datatypes.LeaseSet(leases=[l],dest=self.dest, ls_enckey=enckey, ls_sigkey=sigkey)
         msg = messages.CreateLSMessage(
             sid=self._sid,

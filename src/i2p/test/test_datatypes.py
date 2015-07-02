@@ -35,11 +35,11 @@ class TestDestination(TestCase):
         assert len(dest.cert.data) == 0
 
     def test_serialize(self):
-        dest = datatypes.Destination(crypto.ElGamalGenerate(), crypto.DSAGenerate(), datatypes.Certificate())
+        dest = datatypes.Destination(crypto.ElGamalKey(), crypto.DSAKey(), datatypes.Certificate())
         data = dest.serialize()
         dest2 = datatypes.Destination(raw=data)
-        assert dest2.enckey.y == dest.enckey.y
-        assert dest2.sigkey.y == dest.sigkey.y
+        assert dest2.enckey.key.y == dest.enckey.key.y
+        assert dest2.sigkey.key.y == dest.sigkey.key.y
         assert dest2.cert.type == dest.cert.type
 
     def test_base64(self):
@@ -54,19 +54,19 @@ class TestDestination(TestCase):
 class TestLeaseSet(TestCase):
 
     def test_serialize(self):
-        dest = datatypes.Destination(crypto.ElGamalGenerate(), crypto.DSAGenerate(), datatypes.Certificate())
+        dest = datatypes.Destination(crypto.ElGamalKey(), crypto.DSAKey(), datatypes.Certificate())
         lease = datatypes.Lease(b'f'*32, 1, datatypes.Date(1))
-        ls = datatypes.LeaseSet(dest=dest, ls_enckey=crypto.ElGamalGenerate(), ls_sigkey=crypto.DSAGenerate(), leases=[lease])
+        ls = datatypes.LeaseSet(dest=dest, ls_enckey=crypto.ElGamalKey(), ls_sigkey=crypto.DSAKey(), leases=[lease])
         data = ls.serialize()
         dest.dsa_verify(data[:-40], data[-40:])
 
     def test_parse(self):
-        dest = datatypes.Destination(crypto.ElGamalGenerate(), crypto.DSAGenerate(), datatypes.Certificate())
+        dest = datatypes.Destination(crypto.ElGamalKey(), crypto.DSAKey(), datatypes.Certificate())
         lease = datatypes.Lease(b'f'*32, 1, datatypes.Date(1))
-        ls = datatypes.LeaseSet(dest=dest, ls_enckey=crypto.ElGamalGenerate(), ls_sigkey=crypto.DSAGenerate(), leases=[lease])
+        ls = datatypes.LeaseSet(dest=dest, ls_enckey=crypto.ElGamalKey(), ls_sigkey=crypto.DSAKey(), leases=[lease])
         data = ls.serialize()
         ls2 = datatypes.LeaseSet(raw=data)
         assert ls2.dest.base64() == ls.dest.base64()
-        assert ls2.enckey.y == ls.enckey.y
-        assert ls2.sigkey.y == ls.sigkey.y
+        assert ls2.enckey.key.y == ls.enckey.key.y
+        assert ls2.sigkey.key.y == ls.sigkey.key.y
         assert len(ls2.leases) == len(ls.leases)

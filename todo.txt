@@ -1,4 +1,3 @@
-(B) Refactor i2p.crypto to have each signing key type implement i2p.datatypes.SigningKey +KeyCerts
 (A) finish i2p.socket implementation +socket
 (B) unit tests for i2p.socket +socket +tests
 (C) unit tests for i2p.crypto +tests

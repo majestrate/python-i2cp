@@ -11,36 +11,24 @@ class TestCrypto(TestCase):
 
 
     def test_dsa_sign_verfiy_valid(self):
-        key = crypto.DSAGenerate()
+        key = crypto.DSAKey()
 
         assert key is not None
-        assert key.has_private()
 
-        sig = crypto.DSA_SHA1_SIGN(key, self.data)
+        sig = key.sign(self.data)
 
         assert sig is not None
         assert len(sig) == 40
 
-        try:
-            crypto.DSA_SHA1_VERIFY(key, self.data, sig)
-        except crypto.DSAException:
-            assert False
-        else:
-            assert True
+        assert key.verify(self.data, sig)
 
 
     def test_dsa_sign_verfiy_invalid(self):
-        key = crypto.DSAGenerate()
+        key = crypto.DSAKey()
 
         assert key is not None
-        assert key.has_private()
 
         badsig = b'\x00' * 40
         assert len(badsig) == 40
 
-        try:
-            crypto.DSA_SHA1_VERIFY(key, self.data, badsig)
-        except crypto.DSAException:
-            assert True
-        else:
-            assert False
+        assert not key.verify(self.data, badsig)

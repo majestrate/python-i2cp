@@ -80,37 +80,6 @@ class String(object):
         return struct.pack(b'>B', dlen) + data
 
 
-class SigningKey:
-    """
-    base class for signing keys
-    """
-
-    def __init__(self, raw=None, pub=None, priv=None):
-        if raw:
-            # load a key from raw bytes
-            self.load(raw)
-        else:
-            # set the keys directly
-            self.pub = pub
-            self.priv = priv
-
-
-    def sign(self, data):
-        """
-        sign data with private key
-        :param data: bytearray to sign
-        :return: a detached signature
-        """
-
-    def verify(self, data, sig):
-        """
-        verify detached signature for data
-        :param data: bytearray for data that was signed
-        :param sig: bytearray for detached sig
-        :return: True if valid signature otherwise False
-        """
-
-
 class CertificateType(Enum):
     NULL = 0
     HASHCASH = 1
@@ -212,11 +181,11 @@ class Destination(object):
             raise ValueError('invalid Destination')
         cert = Certificate(raw=data[384:], b64=False)
         if cert.type == CertificateType.NULL:
-            return crypto.ElGamalPublicKey(data[:256]), crypto.DSAPublicKey(data[256:384]), cert, None
+            return crypto.ElGamalKey(raw=data[:256]), crypto.DSAKey(raw=data[256:384]), cert, None
 
     @staticmethod
     def generate_dsa(fname):
-        enckey , sigkey = crypto.ElGamalGenerate(), crypto.DSAGenerate()
+        enckey, sigkey = crypto.ElGamalGenerate(), crypto.DSAKey()
         with open(fname, 'wb') as wf:
             wf.write(int(CertificateType.NULL.value).to_bytes(1, 'big'))
             crypto.dump_keypair(enckey, sigkey, wf)
@@ -227,7 +196,8 @@ class Destination(object):
         with open(fname, 'rb') as rf:
             keytype = CertificateType(int.from_bytes(rf.read(1),'big'))
             if keytype == CertificateType.NULL:
-                enckey, sigkey = crypto.load_keypair(rf)
+                enckey = ElGamalKey(raw=rf)
+                sigkey = DSAKey(raw=rf)
                 data = rf.read()
                 cert = Certificate()
         if enckey and sigkey:
@@ -249,7 +219,7 @@ class Destination(object):
 
     def sign(self, data):
         if self.cert.type == CertificateType.NULL:
-            return crypto.DSA_SHA1_SIGN(self.sigkey, data)
+            return self.sigkey.sign(data)
 
     def signature_size(self):
         if self.cert.type == CertificateType.NULL:
@@ -257,11 +227,11 @@ class Destination(object):
 
 
     def dsa_verify(self, data, sig):
-        crypto.DSA_SHA1_VERIFY(self.sigkey, data, sig)
+        return self.sigkey.verify(data, sig)
 
     def verify(self, data, sig):
         if self.cert.type == CertificateType.NULL:
-            self.dsa_verify(data, sig)
+            return self.dsa_verify(data, sig)
         else:
             raise exceptions.I2CPException('cannot verify data: unknown key type')
 
@@ -273,7 +243,7 @@ class Destination(object):
         return util.i2p_b32encode(crypto.sha256(data)).decode('ascii')
 
     def dsa_sign(self, data):
-        return crypto.DSA_SHA1_SIGN(self.sigkey, data)
+        return self.sigkey.sign(data)
 
     def sign(self, data):
         if self.cert.type == CertificateType.NULL:
@@ -284,8 +254,8 @@ class Destination(object):
     def serialize(self):
         data = bytes()
         if self.cert.type == CertificateType.NULL:
-            data += crypto.elgamal_public_key_to_bytes(self.enckey)
-            data += crypto.dsa_public_key_to_bytes(self.sigkey)
+            data += self.enckey.get_pubkey()
+            data += self.sigkey.get_pubkey()
             data += self.cert.serialize()
         self._log.debug('serialize len=%d' % len(data))
         return data
@@ -331,10 +301,10 @@ class LeaseSet(object):
             self.dest.dsa_verify(raw[:-40], self.sig)
             # Signature matches, now parse the rest
             data = data[:len(self.dest)]
-            self.enckey = crypto.ElGamalPublicKey(data[:256])
+            self.enckey = crypto.ElGamalKey(raw=data[:256])
             self._log.debug(self.enckey)
             data = data[256:]
-            self.sigkey = crypto.DSAPublicKey(data[:128])
+            self.sigkey = crypto.DSAKey(raw=data[:128])
             self._log.debug(self.sigkey)
             data = data[128:]
             numls = data[0]
@@ -353,8 +323,8 @@ class LeaseSet(object):
     def __str__(self):
         return '[LeaseSet leases=%s enckey=%s sigkey=%s dest=%s]' % (
             self.leases,
-            [crypto.elgamal_public_key_to_bytes(self.enckey)],
-            [crypto.dsa_public_key_to_bytes(self.sigkey)],
+            [crypto.self.enckey.get_pubkey()],
+            [crypto.self.sigkey.get_pubkey()],
             self.dest)
 
     def serialize(self):
@@ -364,8 +334,8 @@ class LeaseSet(object):
         """
         data = bytes()
         data += self.dest.serialize()
-        data += crypto.elgamal_public_key_to_bytes(self.enckey)
-        data += crypto.dsa_public_key_to_bytes(self.sigkey)
+        data += self.enckey.get_pubkey()
+        data += self.sigkey.get_pubkey()
         data += int(len(self.leases)).to_bytes(1,'big')
         for l in self.leases:
             data += l.serialize()
