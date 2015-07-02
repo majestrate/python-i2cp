@@ -129,8 +129,6 @@ def get_default_interface():
     if _interface is None:
         _interface = create_interface()
     return _interface
-    
-atexit.register(_close_module_interface)
 
 def socket(af=AF_I2CP, type=SOCK_STREAM, flags=None):
     """

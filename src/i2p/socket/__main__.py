@@ -50,15 +50,13 @@ def main():
         data = 'GET / HTTP/1.1\r\nHost: {}\r\n\r\n'.format(args.host).encode("utf-8")
         sock.send(data)
         log.debug("sent")
-        sock.recv(1024)
-        log.debug("recv'd")
         sock.close()
         log.debug("closed")
     except Exception as e:
         log.error(e)
         traceback.print_exc(e)
     finally:
-        socket.get_default_interface().close()
+        socket.close()
 
 
 

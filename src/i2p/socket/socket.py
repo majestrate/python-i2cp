@@ -111,11 +111,7 @@ class _SocketEndpoint(client.I2CPHandler):
     @asyncio.coroutine
     def session_made(self, con):
         self._i2cp = con
-
-    @asyncio.coroutine
-    def session_refused(self):
-        # TODO: handle
-        pass
+        raise Return()
 
     @asyncio.coroutine
     def got_dgram(self, dest, data, srcport, dstport):
@@ -123,13 +119,7 @@ class _SocketEndpoint(client.I2CPHandler):
         don't call me
         """
         _log.info("got {} bytes datagram from {} srcport={} dstport={}".format(len(data), dest, srcport, dstport))
-
-    @asyncio.coroutine
-    def session_done(self):
-        """
-        don't call me
-        """
-        self._done_ftr.set_result(True)
+        raise Return()
         
     @asyncio.coroutine
     def got_packet(self, data, srcport, dstport):
@@ -162,7 +152,8 @@ class _SocketEndpoint(client.I2CPHandler):
             stream_handler.got_packet(pkt)
         else:
             self._log.warn("got packet for unknown stream. pkt={} srcport={} dstport={}".format(pkt, srcport, dstport))
-
+        raise Return()
+            
     def _has_stream(self, pkt):
         """
         return true if we have a stream for this packet
@@ -238,7 +229,8 @@ class _SocketEndpoint(client.I2CPHandler):
         # TODO: does this work right? will existing data be recv'd right?
         os.close(fd)
         handler = self._handlers.pop(sid)
-
+        handler.end()
+        
     def _register_socket_stream(self, sid, write_fd):
         """
         register a stream id to write to a file descriptor
@@ -277,23 +269,40 @@ class _SocketEndpoint(client.I2CPHandler):
         """
         close this endpoint, call when we're done using sockets from this guy
         """
+        self._log.debug("close active sockets")
+        for k in self._handlers:
+            self.close_socket(k)
+        if self._loop:
+            self._loop.stop()
+            while self._loop.is_running():
+                time.sleep(0.1)
+                self._log.debug("waiting for loop to stop")
+            self._loop.close()
+            self._loop = None
+        self._log.debug("close underlying i2cp session/connection")
         if self._i2cp:
-            # if we are connected then close the i2cp session
-            self._log.info("closing interface")
-            # close connection
+            self._log.debug("closing i2cp... {}".format(self._i2cp))
             self._i2cp.close()
-            # we no longer have an i2cp session
+            self._log.debug("okay closed i2cp")
             self._i2cp = None
+
+            
+    def _close(self):
+        self._log.debug("Closing interface")
         # if the event loop is already closed we're gud
         if self._loop.is_closed():
             return
+        # set done future
+        self._done_ftr.set_result(True)
         # stop the event loop
         self._loop.stop()
         # wait for it to end
         while self._loop.is_running():
+            self._log.debug("Waiting for loop to end")
             time.sleep(0.1)
         # close it
         self._loop.close()
+        self._log.debug("closed interface")
 
     def socket(self, af=AF_I2CP, type=SOCK_STREAM, flags=None):
         """
@@ -359,6 +368,15 @@ class _SocketState:
         self._started_at = util.now()
         self._connected_at = 0
 
+        # end flag
+        self._end = False
+        
+    def end(self):
+        """
+        
+        """
+        self._end = True
+        
     def _opt_int(self, shortname):
         """
         :param shortname: the name of the option, it will be prefixed with 'i2p.streaming'
@@ -404,6 +422,9 @@ class _SocketState:
         may block
         :return: how much was sent
         """
+        # if we are already closed throw
+        if self._end:
+            raise Exception("already closed")
         sent = 0
         self._log.debug("send {} bytes".format(len(data)))
         while len(data) > self._mtu:
@@ -503,7 +524,10 @@ class _SocketState:
         """
         send our initial syn packet
         """
-        if self.remote_connected():
+        if self._end:
+            self._log.debug("we are ended")
+            return
+        elif self.remote_connected():
             self._log.debug("we are connected, not sending syn")
         else:
             if delay == 0:
@@ -680,19 +704,5 @@ def create_interface(keyfile=defaults.keyfile, i2cp_options=defaults.i2cp_option
     :param i2cp_port: i2cp interface port
     :return: a new socket endpoint used for creating i2p sockets
     """
-    i2cp_port = int(i2cp_port)
-    loop = asyncio.new_event_loop()
-    endpoint_loop = asyncio.new_event_loop()
-    endpoint_handler = _SocketEndpoint(endpoint_loop)
-    i2cp_con = client.Connection(endpoint_handler, i2cp_options, keyfile, i2cp_host, i2cp_port, loop)
-    _log.info("connecting to router at {}:{}".format(i2cp_host, i2cp_port))
-    loop.run_until_complete(i2cp_con.open())
-    if i2cp_con.is_connected():
-        _log.info("we connected, forking event loop")
-        # fork event loop off into the background
-        # XXX: bad idea?
-        threading.Thread(target=loop.run_until_complete, args=(i2cp_con.done(),)).start()
-        threading.Thread(target=endpoint_loop.run_until_complete, args=(endpoint_handler.done(),)).start()
-        return endpoint_handler
-    raise Exception("failed to initialize i2p network interface, not connected")
+    raise NotImplemented()
 
