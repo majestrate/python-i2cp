@@ -1,9 +1,9 @@
 import struct
 import logging
 from enum import Enum
-from i2p.i2cp import datatypes
+from i2p import crypto, datatypes
 
-class packet_flag(Enum):
+class PacketFlag(Enum):
     SYNC = 1 << 0
     CLOSE = 1 << 1
     RESET = 1 << 2
@@ -15,26 +15,34 @@ class packet_flag(Enum):
     PROFILE_INTERACTIVE = 1 << 8
     ECHO = 1 << 9
     NO_ACK = 1 << 10
-    
+
 
 def get_flags(flags):
     """
     get a list of flags set given integer
     """
     ret = []
-    for flag in packet_flag.__members__:
-        flag = getattr(packet_flag, flag)
+    for flag in PacketFlag.__members__:
+        flag = getattr(PacketFlag, flag)
         if flags & flag.value == flag.value:
             ret.append(flag)
     return ret
 
+def make_flags(flags):
+    """
+    turn flags into int
+    """
+    ret = 0
+    for flag in flags:
+        ret |= flag.value
+    return ret
 
 class packet:
 
     _size_table = {
         4 : '>I',
         2 : '>H',
-        1 : 'B'
+        1 : '>B'
     }
 
     _packet_first = (
@@ -44,19 +52,20 @@ class packet:
         (4, 'ack_thru'),
         (1, '_nack_count')
     )
-    
+
     _packet_second = (
         (1, 'resend_delay'),
         (2, 'flags'),
         (2, '_opts_len')
     )
 
-    
+    _mtu = 1730
+
     _log = logging.getLogger("streaming-packet")
 
-    def __init__(self, raw=None, 
-                 send_sid=0, recv_sid=0, seqno=0, 
-                 ack_thru=0, nacks=[], resend_delay=0, 
+    def __init__(self, raw=None,
+                 send_sid=0, recv_sid=0, seqno=0,
+                 ack_thru=0, nacks=[], resend_delay=0,
                  flags=[], opts=None, payload=None):
         """
         streaming packet
@@ -72,7 +81,8 @@ class packet:
             self.resend_delay = resend_delay
             self.flags = flags
             self.opts = opts or bytes()
-            self.payload = payload            
+            self.opts = bytearray(self.opts)
+            self.payload = payload
         else:
             for size, name in self._packet_first:
                 _str = self._size_table[size]
@@ -94,79 +104,155 @@ class packet:
                 val = struct.unpack(unpstr,part)[0]
                 raw = raw[size:]
                 setattr(self, name, val)
-            
+
             self.opts = raw[:self._opts_len]
             self.payload = raw[self._opts_len:]
             self.flags = get_flags(self.flags)
-    
+
     def serialize(self):
         """
         serialize to bytearray
         """
         data = bytearray()
-        for name, size in self._packet_first[:-1]:
+        for size, name in self._packet_first[:-1]:
             _str = self._size_table[size]
             val = getattr(self, name)
             data += struct.pack(_str, val)
 
-        data += struct.pack('B', len(self.nacks))
+        data += struct.pack('>B', len(self.nacks))
 
         for nack in self.nacks:
             data += struct.pack('>I', nack)
 
-        for name, size in self._packet_second[:-1]:
+        for size, name in self._packet_second[:-2]:
             _str = self._size_table[size]
             val = getattr(self, name)
             data += struct.pack(_str, val)
-        
+        data += struct.pack('>H', make_flags(self.flags))
         data += struct.pack('>H', len(self.opts))
         data += self.opts
         data += bytearray(self.payload)
         return data
- 
-    def __repr__(self): 
+
+    def __repr__(self):
         attrs = ('flags', 'send_sid', 'recv_sid', 'seqno', 'ack_thru', 'nacks', 'opts', 'payload')
         _str = '[Streaming Packet '
         for attr in attrs:
-            _str += '%s=%s ' % ( attr, getattr(self, attr))
+            _str += '%s=%s ' % ( attr, [getattr(self, attr)])
         return _str + ']'
 
-    def verify(self):
+    def sign(self, dest):
+        """
+        sign this packet, sets signatures and from destinations
+        any previous option data is discarded
+        :param dest: i2p.i2cp.datatypes.Destination
+        """
+        # set required flags
+        self.set_flags(PacketFlag.MAX_PACKET_SIZE, PacketFlag.FROM_INC, PacketFlag.SIG_INC)
+        # re initialize options
+        self.opts = bytearray()
+        # put the from destination
+        self.opts += dest.serialize()
+        # put the mtu
+        self.opts += struct.pack('>H', self._mtu)
+        # signature offset in opts
+        idx = len(self.opts)
+        self._log.debug("sig starts at {} and is {} B".format(idx, dest.signature_size()))
+        # put zeros the size of the sig that will be generated
+        self.opts += bytearray(dest.signature_size())
+        # sign the packet
+        data = self.serialize()
+        sig = dest.sign(data)
+        self._log.debug("sig is {}".format([sig]))
+        self.opts = dest.serialize() + struct.pack('>H', self._mtu) + sig
+
+    def verify(self, dest=None):
         """
         verify the signature on this streaming packet if it has one
-        :return: true if valid otherwise false
+        :param dest: check against this destination if None use the one in the packet if it exists
+        :return: true if valid signature or if it has no signature, false if signature fails
         """
-        if packet_flags.SIG_INC in self.flags:
+        if PacketFlag.SIG_INC in self.flags:
             self._log.debug("verify packet signature")
-            # TODO: implement
-            self._log.warn("packet not verified, not implemented")
+            idx = 0
+            # skip over packet size if it's there
+            if PacketFlag.MAX_PACKET_SIZE in self.flags:
+                idx += 2
+            # get the destination if it's there
+            if PacketFlag.FROM_INC in self.flags:
+                dest = datatypes.Destination(raw=self.opts[idx:])
+                idx += len(dest)
+            # make sure we got a destination
+            assert dest is not None
+            siglen = dest.signature_size()
+            # extract the signature
+            sig = self.opts[idx:idx+siglen]
+            opts = self.opts
+            self.opts = self.opts[idx:] + bytearray(len(sig)) + self.opts[idx+len(sig):]
+            # serialize packet
+            pkt_data = self.serialize()
+            self.opts = opts
+            # verify signature
+            self._log.debug("verify sig={} data={}".format([sig], [pkt_data]))
+            dest.verify(pkt_data, sig)
+            self._log.debug("aaayyyyo it's fine")
             return True
         else:
-            return False
+            # we don't have a signature, let's assume it's fine
+            return True
 
     def is_syn(self):
         """
         :return: if this is an initial incoming syn packet
         """
-        return self.has_flags(packet_flags.FROM_INC, packet_flags.SYNC, packet_flags.SIG_INC)
+        return self.has_flags(PacketFlag.FROM_INC, PacketFlag.SYNC, PacketFlag.SIG_INC) and self.send_sid == 0
 
     def get_from(self):
         """
         :return: the destination of who sent this packet
         """
         offset = 0
-        if packet_flags.DELAY in self.flags:
+        if PacketFlag.DELAY in self.flags:
             offset += 2
-        if packet_flags.FROM_INC in self.flags:
-            return datatypes.destination(raw=self.options[offset:])
-        return None
-        
+        if PacketFlag.FROM_INC in self.flags:
+            return datatypes.Destination(raw=self.options[offset:])
+
     def is_rst(self):
         """
-        :return: true if this is a valid rst packet
+        :return: true if this is a reset packet
         """
-        return self.has_flags(packet_flags.FROM_INC, packet_flags.RESET, packet_flags.SIG_INC)
-        
+        return self.has_flags(PacketFlag.FROM_INC, PacketFlag.RESET, PacketFlag.SIG_INC)
+
+    def is_close(self):
+        """
+        :return: true if this is a close packet
+        """
+        return self.has_flags(PacketFlag.CLOSE, PacketFlag.SIG_INC)
+
+    def set_flags(self, *args):
+        """
+        set packet flags if they aren't already set
+        """
+        for arg in args:
+            if arg not in self.flags:
+                self.flags.append(arg)
+
+    def set_mtu(self, mtu):
+        """
+        set this packet's mtu, assumes it's a syn
+        :param mtu: nonzero int < 2 ** 16
+        """
+        self.set_flags(PacketFlag.MAX_PACKET_SIZE)
+        self._mtu = mtu
+
+    def get_mtu(self):
+        """
+        :return: the connection's mtu declaired in the packet options or the default if not present
+        """
+        if self.has_flags(PacketFlag.MAX_PACKET_SIZE):
+            return struct.unpack('>H', self.opts[:2])[0]
+        return self._mtu
+
     def has_flags(self, *args):
         """
         check if all the given flags are set in this packet
@@ -182,4 +268,4 @@ class packet:
         """
         :return: true if this is a regular ack
         """
-        return self.seqno == 0 and packet_flags.SYNC not in self.flags
+        return self.seqno == 0 and PacketFlag.SYNC not in self.flags

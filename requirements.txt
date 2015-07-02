@@ -1,3 +1,5 @@
 pycrypto
 enum34>=1.0
 trollius
+future
+pyelliptic==1.5.6

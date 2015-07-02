@@ -6,8 +6,8 @@ import logging
 import time
 import os
 from threading import Thread
+from i2p.datatypes import Destination
 from .client import Connection, I2CPHandler
-from .datatypes import destination
 import trollius as asyncio
 from trollius import Return
 
@@ -15,36 +15,33 @@ class Handler(I2CPHandler):
 
     _log = logging.getLogger('handler')
 
-    def __init__(self, dest, data):
+    def __init__(self, dest, data, delay=0.5):
         self.dest = dest
         self.data = data
+        self._delay = delay * 1.0
 
-    @asyncio.coroutine
     def got_dgram(self, dest, data, srcport, dstport):
         self._log.info('got dgram from {}:{} to port {} : {}'.format (
             dest, srcport, dstport, [data]))
-        raise Return()
-    
+
     def _send(self):
         if self.dest is not None:
-            self.conn.send_dgram(self.dest, os.urandom(len(self.data)))
-            asyncio.get_event_loop().call_later(1.0, self._send)
-        
-        
-    @asyncio.coroutine
+            self.conn.send_dgram(self.dest, self.data)
+            asyncio.get_event_loop().call_later(self._delay, self._send)
+
+
     def session_made(self, conn):
         self.conn = conn
-        self._log.info('session made')
-        asyncio.get_event_loop().call_later(1.0, self._send)
-        raise Return()
-        
+        self._log.info('session made we are {}'.format(conn.dest))
+        asyncio.get_event_loop().call_later(self._delay, self._send)
+
 def main():
     ap = AP()
     ap.add_argument('--host', type=str, default='127.0.0.1')
     ap.add_argument('--port', type=int, default=7654)
     ap.add_argument('--debug', action='store_const', const=True, default=False)
     ap.add_argument('--keyfile', type=str, default='i2cp.key')
-    ap.add_argument('--dgram', type=str, default='A'*1000)
+    ap.add_argument('--dgram', type=str, default='A'*4000)
     ap.add_argument('--dest', type=str)
 
     args = ap.parse_args()
@@ -61,12 +58,12 @@ def main():
     }
     handler = Handler(dest, dgram)
     c1 = Connection(keyfile=args.keyfile, handler=handler, session_options=opts, i2cp_host=args.host, i2cp_port=args.port)
-    c1.open()
     loop = asyncio.get_event_loop()
+    loop.run_until_complete(c1.open())
     try:
         loop.run_forever()
     finally:
         loop.close()
-        
+
 if __name__ == '__main__':
     main()
