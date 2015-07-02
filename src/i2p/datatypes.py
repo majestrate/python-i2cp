@@ -229,6 +229,8 @@ class Destination(object):
             enckey = cert.enctype.cls() if cert else crypto.ElGamalKey()
         if sigkey is None:
             sigkey = cert.sigtype.cls() if cert else crypto.DSAKey()
+        if cert is None:
+            cert = Certificate()
         self.enckey = enckey
         self.sigkey = sigkey
         self.cert = cert
