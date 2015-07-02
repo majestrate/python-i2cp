@@ -34,6 +34,14 @@ class TestDestination(TestCase):
         assert dest.cert.type == datatypes.CertificateType.NULL
         assert len(dest.cert.data) == 0
 
+    def test_serialize(self):
+        dest = datatypes.Destination(crypto.ElGamalGenerate(), crypto.DSAGenerate(), datatypes.Certificate())
+        data = dest.serialize()
+        dest2 = datatypes.Destination(raw=data)
+        assert dest2.enckey.y == dest.enckey.y
+        assert dest2.sigkey.y == dest.sigkey.y
+        assert dest2.cert.type == dest.cert.type
+
     def test_base64(self):
         dest = datatypes.Destination(raw=STATS_I2P_DEST_DSA, b64=True)
         assert dest.base64() == STATS_I2P_DEST_DSA
