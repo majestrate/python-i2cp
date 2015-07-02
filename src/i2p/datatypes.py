@@ -108,11 +108,9 @@ class Certificate(object):
     def __init__(self, type=CertificateType.NULL, data=bytes(), raw=None, b64=False):
         if raw:
             type, data = self._parse(raw, b64)
-        if isinstance(type, int):
-            type = CertificateType(type)
         if isinstance(type, str):
             type = type.encode('ascii')
-        if isinstance(type, bytes):
+        if isinstance(type, int) or isinstance(type, bytes):
             type = CertificateType(type)
         if raw is None and b64:
             data = util.i2p_b64decode(data)
@@ -137,10 +135,23 @@ class KeyCertificate(Certificate):
 
     _log = logging.getLogger('KeyCertificate')
 
-    def __init__(self, data=bytes(), raw=None, b64=False):
+    def __init__(self, sigkey=None, enckey=None, data=bytes(), raw=None, b64=False):
+        if sigkey is not None and enckey is not None:
+            data = self._data_from_keys(sigkey, enckey)
         super().__init__(CertificateType.KEY, data, raw, b64)
         if len(self.data) < 4:
             raise ValueError("data too short")
+
+    @staticmethod
+    def _data_from_keys(sigkey, enckey):
+        data = bytes()
+        data += struct.pack(b'>H', sigkey.key_type)
+        data += struct.pack(b'>H', enckey.key_type)
+        # XXX Assume no extra crypto key data
+        sigpub = sigkey.get_pubkey()
+        extra = max(0, len(sigpub) - 128)
+        data += sigpub[128:128+extra]
+        return data
 
     @property
     def sigtype(self):
