@@ -1,18 +1,14 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 from builtins import *
+
 from Crypto.Hash import SHA, SHA256
 from Crypto.PublicKey import ElGamal, DSA
 from Crypto.Random.random import StrongRandom as random
 from pyelliptic.ecc import ECC
-from i2p.i2cp.util import *
-import codecs
 from enum import Enum
-import math
-import string
 #import nacl.signing as nacl
 
-sha1 = lambda x: SHA.new(x).digest()
-sha256 = lambda x: SHA256.new(x).digest()
+from i2p.i2cp.util import *
 
 #
 # Parameters
@@ -37,6 +33,10 @@ F4_4096_SPEC = None
 Ed25519_SHA_512_SPEC = None
 
 
+def sha1(x): return SHA.new(x).digest()
+def sha256(x): return SHA256.new(x).digest()
+
+
 #
 # Algorithms
 #
@@ -45,11 +45,13 @@ class EncAlgo(Enum):
     ELGAMAL = "ElGamal"
     EC = "EC"
 
+
 class SigAlgo(Enum):
     DSA = "DSA"
     EC = "EC"
     EdDSA = "EdDSA"
     RSA = "RSA"
+
 
 class EncType(Enum):
     ELGAMAL_2048 = (0, 256, 256, EncAlgo.ELGAMAL, "ElGamal/None/NoPadding", ELGAMAL_2048_SPEC, "0")
@@ -95,6 +97,7 @@ class EncType(Enum):
             if enc.code == code:
                 return enc
         return None
+
 
 class SigType(Enum):
     DSA_SHA1 = (0, 128, 20, 20, 40, SigAlgo.DSA, "SHA-1", "SHA1withDSA", DSA_SHA1_SPEC, "0")
@@ -387,17 +390,17 @@ class DSAKey(SigningKey):
         """Generate DSA-SHA1 signature."""
         k = random().randint(1, self.key.q - 1)
         data = sha1(data)
-        R, S =  self.key.sign(data, k)
-        return int(R).to_bytes(20,'big') + int(S).to_bytes(20,'big')
+        R, S = self.key.sign(data, k)
+        return int(R).to_bytes(20, 'big') + int(S).to_bytes(20, 'big')
 
     def _verify(self, data, sig):
         """Verify DSA-SHA1 signature."""
         data = sha1(data)
-        R, S = int.from_bytes(sig[:20],'big'), int.from_bytes(sig[20:],'big')
-        return self.key.verify(data, (R,S))
+        R, S = int.from_bytes(sig[:20], 'big'), int.from_bytes(sig[20:], 'big')
+        return self.key.verify(data, (R, S))
 
 
-def gen_elgamal_key(fname=None,fd=None):
+def gen_elgamal_key(fname=None, fd=None):
     key = ElGamalKey()
     doclose = fd is None
     if doclose:
@@ -406,7 +409,8 @@ def gen_elgamal_key(fname=None,fd=None):
     if doclose:
         fd.close()
 
-def gen_dsa_key(fname=None,fd=None):
+
+def gen_dsa_key(fname=None, fd=None):
     key = DSAKey()
     nofname = fd is None
     if nofname:
@@ -415,13 +419,16 @@ def gen_dsa_key(fname=None,fd=None):
     if nofname:
         fd.close()
 
+
 def load_dsa_key(fname):
     with open(fname, 'rb') as rf:
         return DSAKey(fd=rf)
 
+
 def gen_keypair(fd):
     gen_elgamal_key(fd)
     gen_dsa_key(fd)
+
 
 def dump_keypair(enckey, sigkey, fd):
     fd.write(enckey.serialize())

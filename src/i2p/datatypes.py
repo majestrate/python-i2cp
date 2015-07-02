@@ -1,11 +1,13 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 from builtins import *
-from . import crypto
-from .i2cp import util
-from enum import Enum
 import logging
 import struct
 import time
+
+from enum import Enum
+
+from . import crypto
+from .i2cp import util
 
 
 #
@@ -88,12 +90,13 @@ class CertificateType(Enum):
     MULTI = 4
     KEY = 5
 
+
 class Certificate(object):
 
     _log = logging.getLogger('Certificate')
 
     def _parse(self, data, b64=True):
-        self._log.debug('cert data len=%d' %len(data))
+        self._log.debug('cert data len=%d' % len(data))
         if b64:
             data = util.i2p_b64decode(data)
         if len(data) < 3:
@@ -174,7 +177,7 @@ class Destination(object):
     _log = logging.getLogger('Destination')
 
     def _parse(self, data, b64=True):
-        self._log.debug('dest data len=%d' %len(data))
+        self._log.debug('dest data len=%d' % len(data))
         if b64:
             data = util.i2p_b64decode(data)
         if len(data) < 387:
@@ -194,7 +197,7 @@ class Destination(object):
     def load(fname):
         enckey, sigkey, cert, edkey = None, None, None, None
         with open(fname, 'rb') as rf:
-            keytype = CertificateType(int.from_bytes(rf.read(1),'big'))
+            keytype = CertificateType(int.from_bytes(rf.read(1), 'big'))
             if keytype == CertificateType.NULL:
                 enckey = ElGamalKey(raw=rf)
                 sigkey = DSAKey(raw=rf)
@@ -224,7 +227,6 @@ class Destination(object):
     def signature_size(self):
         if self.cert.type == CertificateType.NULL:
             return 40
-
 
     def dsa_verify(self, data, sig):
         return self.sigkey.verify(data, sig)
@@ -272,7 +274,7 @@ class Lease(object):
         self.ri = ri_hash
         self.tid = tid
         self.end_date = end_date
-        self._log.debug('ri_hash %d bytes'%len(ri_hash))
+        self._log.debug('ri_hash %d bytes' % len(ri_hash))
 
     def serialize(self):
         data = bytearray()
@@ -336,7 +338,7 @@ class LeaseSet(object):
         data += self.dest.serialize()
         data += self.enckey.get_pubkey()
         data += self.sigkey.get_pubkey()
-        data += int(len(self.leases)).to_bytes(1,'big')
+        data += int(len(self.leases)).to_bytes(1, 'big')
         for l in self.leases:
             data += l.serialize()
         sig = self.dest.dsa_sign(data)
@@ -346,12 +348,12 @@ class LeaseSet(object):
         return data
 
 
-
 class I2CPProtocol(Enum):
 
     STREAMING = 6
     DGRAM = 17
     RAW = 18
+
 
 class datagram(object):
 
@@ -359,6 +361,7 @@ class datagram(object):
         if hasattr(self, 'payload') and hasattr(obj, 'payload'):
             return self.payload == obj.payload
         return False
+
 
 class raw_datagram(object):
 
@@ -375,6 +378,7 @@ class raw_datagram(object):
     def serialize(self):
         return self.data
 
+
 class dsa_datagram(datagram):
 
     protocol = I2CPProtocol.DGRAM
@@ -384,7 +388,7 @@ class dsa_datagram(datagram):
         if raw:
             self._log.debug('rawlen=%d' % len(raw))
             self.data = raw
-            self._log.debug('load dgram data: %s' %[ raw ])
+            self._log.debug('load dgram data: %s' % [raw])
             self.dest = Destination(raw=raw)
             self._log.debug('destlen=%s' % self.dest)
             raw = raw[len(self.dest):]
@@ -403,7 +407,7 @@ class dsa_datagram(datagram):
             self.data += self.dest.serialize()
             payload_hash = crypto.sha256(self.payload)
             self.sig = self.dest.sign(payload_hash)
-            self._log.debug('signature=%s' % [ self.sig])
+            self._log.debug('signature=%s' % [self.sig])
             self.data += self.sig
             self.data += payload
 
@@ -411,7 +415,7 @@ class dsa_datagram(datagram):
         return self.data
 
     def __str__(self):
-        return '[DSADatagram payload=%s sig=%s]' % ( self.payload, self.sig)
+        return '[DSADatagram payload=%s sig=%s]' % (self.payload, self.sig)
 
 
 class i2cp_payload(object):
@@ -423,9 +427,9 @@ class i2cp_payload(object):
     def __init__(self, raw=None, data=None, srcport=0, dstport=0, proto=I2CPProtocol.RAW):
         if raw:
             self.dlen = struct.unpack(b'>I', raw[:4])[0]
-            self._log.debug('payload len=%d' %self.dlen)
+            self._log.debug('payload len=%d' % self.dlen)
             data = raw[4:self.dlen]
-            self._log.debug('compressed payload len=%d' %len(data))
+            self._log.debug('compressed payload len=%d' % len(data))
             assert data[:3] == self.gz_header
             self.flags = data[3]
             self.srcport = struct.unpack(b'>H', data[4:6])[0]
@@ -436,7 +440,7 @@ class i2cp_payload(object):
             self._log.debug('decompressed=%s' % [self.data])
         else:
             if util.check_portnum(srcport) and util.check_portnum(dstport):
-                self._log.debug('payload data len=%d' %len(data))
+                self._log.debug('payload data len=%d' % len(data))
                 self.data = util.i2p_compress(data)
                 self._log.debug('compressed payload len=%d' % len(self.data))
                 self.srcport = srcport
@@ -459,7 +463,6 @@ class i2cp_payload(object):
         dlen = len(data)
         self._log.debug('serialize len=%d' % dlen)
         return struct.pack(b'>I', dlen) + data
-
 
     def __str__(self):
         return '[Payload flags=%s srcport=%s dstport=%s xflags=%s proto=%s data=%s]' % (
