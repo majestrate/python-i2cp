@@ -1,8 +1,6 @@
-(A) Implement KeyCerts +KeyCerts
-(B) Refactor i2p.i2cp.crypto to have each signing key type implement i2p.i2cp.crypto.SigningKey +KeyCerts
-(A) finish i2p.socket implementaion +socket
+(A) finish i2p.socket implementation +socket
 (B) unit tests for i2p.socket +socket +tests
-(C) unit tests for i2p.i2cp.crypto +tests
+(C) unit tests for i2p.crypto +tests
 (C) unit tests for i2p.i2cp.client +tests
 (D) i2p.socket perf/statistics api +socket
-(B) py2 backwards comapt
+(B) py2 backwards compat

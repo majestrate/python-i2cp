@@ -6,8 +6,8 @@ import logging
 import time
 import os
 from threading import Thread
+from i2p.datatypes import Destination
 from .client import Connection, I2CPHandler
-from .datatypes import Destination
 import trollius as asyncio
 from trollius import Return
 

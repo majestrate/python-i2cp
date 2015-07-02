@@ -7,11 +7,10 @@ import socket
 import struct
 import time
 import functools
+from i2p import crypto, datatypes
 from . import exceptions
 from . import messages
-from . import datatypes
 from . import util
-from . import crypto
 
 import trollius as asyncio
 from trollius import From, Return
@@ -44,12 +43,11 @@ class I2CPHandler(object):
         called if the i2cp session is disconnected abruptly
         """
 
-    @asyncio.coroutine
     def session_done(self):
         """
         called when the session is done and the i2cp connection has gracefully disconnected
         """
-        
+
 class PrintDestinationHandler(I2CPHandler):
     """
     a handler that prints our destination and then closes the connection
@@ -109,13 +107,13 @@ class Connection(object):
         self._enckey = crypto.ElGamalGenerate()
         # session handlers
         self._msg_handlers = {
-            messages.message_type.SessionStatus : self._msg_handle_session_status,
-            messages.message_type.RequestLS : self._msg_handle_request_ls,
-            messages.message_type.SetDate : self._msg_handle_set_date,
-            messages.message_type.Disconnect : self._msg_handle_disconnect,
-            messages.message_type.RequestVarLS : self._msg_handle_request_var_ls,
-            messages.message_type.HostLookupReply : self._msg_handle_host_lookup_reply,
-            messages.message_type.MessagePayload : self._msg_handle_message_payload,
+            messages.MessageType.SessionStatus : self._msg_handle_session_status,
+            messages.MessageType.RequestLS : self._msg_handle_request_ls,
+            messages.MessageType.SetDate : self._msg_handle_set_date,
+            messages.MessageType.Disconnect : self._msg_handle_disconnect,
+            messages.MessageType.RequestVarLS : self._msg_handle_request_var_ls,
+            messages.MessageType.HostLookupReply : self._msg_handle_host_lookup_reply,
+            messages.MessageType.MessagePayload : self._msg_handle_message_payload,
         }
         # destination cache
         self._dest_cache = dict()
@@ -205,7 +203,7 @@ class Connection(object):
         self._log.debug('recv header...')
         hdrdata = yield From(self._reader.readexactly(5))
         msglen, _type = struct.unpack(b'>IB', hdrdata)
-        msgtype = messages.message_type(_type)
+        msgtype = messages.MessageType(_type)
         # read body
         self._log.debug('recv %d bytes' % msglen)
         self._log.debug('read message of size {}'.format(msglen))
@@ -299,7 +297,7 @@ class Connection(object):
         handle variable lease set request message
         """
         self._log.debug('handle vls message')
-        dummy_sigkey = crypto.DSAGenerate()
+        dummy_sigkey = crypto.DSAKey()
         #enckey = self.dest.enckey
         sigkey = self.dest.sigkey
         leases = list()
@@ -337,14 +335,14 @@ class Connection(object):
         handle message payload message
         """
         payload = msg.payload
-        if payload.proto == datatypes.i2cp_protocol.DGRAM:
+        if payload.proto == datatypes.I2CPProtocol.DGRAM:
             self._log.debug('dgram payload=%s' % [ payload.data ])
             dgram = datatypes.dsa_datagram(raw=payload.data)
             self.handler.got_dgram(dgram.dest, dgram.payload, payload.srcport, payload.dstport)
-        elif payload.proto == datatypes.i2cp_protocol.RAW:
+        elif payload.proto == datatypes.I2CPProtocol.RAW:
             self._log.debug('dgram-raw paylod=%s' % [ payload.data ])
             self.handler.got_dgram(None, payload.data, payload.srcport, payload.dstport)
-        elif payload.proto == datatypes.i2cp_protocol.STREAMING:
+        elif payload.proto == datatypes.I2CPProtocol.STREAMING:
             self._log.debug('streaming payload=%s' % [ payload.data ] )
             self.handler.got_packet(payload.data, payload.srcport, payload.dstport)
         else:
@@ -372,7 +370,7 @@ class Connection(object):
         """
         try:
             self._log.info('session status: {}'.format(msg.status))
-            if msg.status == messages.session_status.CREATED:
+            if msg.status == messages.SessionStatus.CREATED:
                 self._log.debug('session created')
                 self._created = True
                 self._sid = msg.sid
@@ -391,13 +389,14 @@ class Connection(object):
         if dest:
             self._log.debug('send packet to {}: {}'.format(dest.base32(), packet))
             pkt_data = packet.serialize()
-            p = datatypes.i2cp_payload(proto=datatypes.i2cp_protocol.STREAMING, srcport=srcport, dstport=dstport, data=pkt_data).serialize()
+            p = datatypes.i2cp_payload(proto=datatypes.I2CPProtocol.STREAMING, srcport=srcport, dstport=dstport, data=pkt_data).serialize()
             msg = messages.SendMessageMessage(sid=self._sid, dest=dest, payload=p)
             # send the packet safely
             self._loop.call_soon_threadsafe(self._async, self._send_msg(msg))
         else:
             # look up the destination
             self._issue_lookup()
+
 
     def send_raw_dgram(self, dest, data, srcport=0, dstport=0):
         """
@@ -475,6 +474,6 @@ class Connection(object):
         :return: a future that ends when this connection is done
         """
         return self._done_future
-        
+
     def __del__(self):
         self.close()

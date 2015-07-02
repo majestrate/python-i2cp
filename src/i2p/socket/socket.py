@@ -1,6 +1,5 @@
+from i2p import crypto, datatypes
 from i2p.i2cp import client
-from i2p.i2cp import crypto
-from i2p.i2cp import datatypes
 from i2p.i2cp import util
 
 from . import defaults
@@ -22,9 +21,9 @@ from enum import Enum
 
 _log = logging.getLogger("i2p.socket.socket")
 
-SOCK_STREAM = datatypes.i2cp_protocol.STREAMING
-SOCK_DGRAM = datatypes.i2cp_protocol.DGRAM
-SOCK_RAW = datatypes.i2cp_protocol.RAW
+SOCK_STREAM = datatypes.I2CPProtocol.STREAMING
+SOCK_DGRAM = datatypes.I2CPProtocol.DGRAM
+SOCK_RAW = datatypes.I2CPProtocol.RAW
 
 class _SocketFamily(Enum):
     # unused for now
@@ -58,7 +57,7 @@ class _SocketEndpoint(client.I2CPHandler):
         :return: a future that finishes when the packet handling is done
         """
         return self._done_ftr
-        
+
     def lookup(self, name, tries=1):
         """
         try to look up a name, will block until session is made
@@ -108,20 +107,16 @@ class _SocketEndpoint(client.I2CPHandler):
             time.sleep(1)
         self.dest = self._i2cp.dest
 
-    @asyncio.coroutine
     def session_made(self, con):
         self._i2cp = con
         raise Return()
 
-    @asyncio.coroutine
     def got_dgram(self, dest, data, srcport, dstport):
         """
         don't call me
         """
         _log.info("got {} bytes datagram from {} srcport={} dstport={}".format(len(data), dest, srcport, dstport))
-        raise Return()
-        
-    @asyncio.coroutine
+
     def got_packet(self, data, srcport, dstport):
         """
         don't call me

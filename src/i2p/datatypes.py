@@ -1,11 +1,13 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 from builtins import *
-from . import util
-from . import crypto
-from enum import Enum
 import logging
 import struct
 import time
+
+from enum import Enum
+
+from . import crypto
+from .i2cp import util
 
 
 #
@@ -80,37 +82,6 @@ class String(object):
         return struct.pack(b'>B', dlen) + data
 
 
-class SigningKey:
-    """
-    base class for signing keys
-    """
-
-    def __init__(self, raw=None, pub=None, priv=None):
-        if raw:
-            # load a key from raw bytes
-            self.load(raw)
-        else:
-            # set the keys directly
-            self.pub = pub
-            self.priv = priv
-
-
-    def sign(self, data):
-        """
-        sign data with private key
-        :param data: bytearray to sign
-        :return: a detached signature
-        """
-
-    def verify(self, data, sig):
-        """
-        verify detached signature for data
-        :param data: bytearray for data that was signed
-        :param sig: bytearray for detached sig
-        :return: True if valid signature otherwise False
-        """
-
-
 class CertificateType(Enum):
     NULL = 0
     HASHCASH = 1
@@ -119,19 +90,29 @@ class CertificateType(Enum):
     MULTI = 4
     KEY = 5
 
+
 class Certificate(object):
 
     _log = logging.getLogger('Certificate')
 
-    def __init__(self, type=CertificateType.NULL, data=bytes(), b64=True):
+    def _parse(self, data, b64=False):
+        self._log.debug('cert data len=%d' % len(data))
+        if b64:
+            data = util.i2p_b64decode(data)
+        if len(data) < 3:
+            raise ValueError('invalid Certificate')
+        ctype = CertificateType(util.get_as_int(data[0]))
+        clen = struct.unpack(b'>H', data[1:3])[0]
+        return ctype, data[3:3+clen]
 
-        if isinstance(type, int) or isinstance(type, CertificateType):
-            type = CertificateType(type)
+    def __init__(self, type=CertificateType.NULL, data=bytes(), raw=None, b64=False):
+        if raw:
+            type, data = self._parse(raw, b64)
         if isinstance(type, str):
             type = type.encode('ascii')
-        if isinstance(type, bytes):
+        if isinstance(type, int) or isinstance(type, bytes):
             type = CertificateType(type)
-        if b64:
+        if raw is None and b64:
             data = util.i2p_b64decode(data)
         self.data = data
         self.type = type
@@ -150,6 +131,50 @@ class Certificate(object):
         return data
 
 
+class KeyCertificate(Certificate):
+
+    _log = logging.getLogger('KeyCertificate')
+
+    def __init__(self, sigkey=None, enckey=None, data=bytes(), raw=None, b64=False):
+        if sigkey is not None and enckey is not None:
+            data = self._data_from_keys(sigkey, enckey)
+        super().__init__(CertificateType.KEY, data, raw, b64)
+        if len(self.data) < 4:
+            raise ValueError("data too short")
+
+    @staticmethod
+    def _data_from_keys(sigkey, enckey):
+        data = bytes()
+        data += struct.pack(b'>H', sigkey.key_type)
+        data += struct.pack(b'>H', enckey.key_type)
+        # XXX Assume no extra crypto key data
+        sigpub = sigkey.get_pubkey()
+        extra = max(0, len(sigpub) - 128)
+        data += sigpub[128:128+extra]
+        return data
+
+    @property
+    def sigtype(self):
+        return crypto.SigType.get_by_code(struct.unpack(b'>H', self.data[:2])[0])
+
+    @property
+    def enctype(self):
+        return crypto.EncType.get_by_code(struct.unpack(b'>H', self.data[2:4])[0])
+
+    @property
+    def extra_sigkey_data(self):
+        if self.sigtype is None:
+            raise ValueError("unknown sig type")
+        # XXX Assume no extra crypto key data
+        extra = max(0, self.sigtype.pubkey_len - 128)
+        return self.data[4:4+extra]
+
+    @property
+    def extra_enckey_data(self):
+        # XXX Assume no extra crypto key data
+        return bytes()
+
+
 #
 # Common data structures
 #
@@ -158,92 +183,90 @@ class Destination(object):
 
     _log = logging.getLogger('Destination')
 
-    @staticmethod
-    def parse(data, b64=True):
-        Destination._log.debug('dest data len=%d' %len(data))
+    def _parse(self, data, b64=False):
+        self._log.debug('dest data len=%d' % len(data))
         if b64:
             data = util.i2p_b64decode(data)
-        ctype = CertificateType(util.get_as_int(data[384]))
-        clen = struct.unpack(b'>H', data[385:387])[0]
-        cert = Certificate(ctype, data[387:387+clen])
-        if cert.type == CertificateType.NULL:
-            return crypto.ElGamalPublicKey(data[:256]), crypto.DSAPublicKey(data[256:384]), cert, None
+        if len(data) < 387:
+            raise ValueError('invalid Destination')
+        cert = Certificate(raw=data[384:])
+        if cert.type == CertificateType.KEY:
+            cert = KeyCertificate(raw=data[384:])
+            # XXX Assume no extra crypto key data
+            return cert.enctype.cls(
+                       raw=data[:min(256, cert.enctype.pubkey_len)]), \
+                   cert.sigtype.cls(
+                       raw=data[max(256, 384-cert.sigtype.pubkey_len):384] +
+                           cert.extra_sigkey_data), \
+                   cert
+        elif cert.type != CertificateType.MULTI:
+            # No KeyCert, so defaults to ElGamal/DSA
+            return crypto.ElGamalKey(raw=data[:256]), \
+                   crypto.DSAKey(raw=data[256:384]), cert
+        else:
+            raise NotImplementedError('Multiple certs not yet supported')
 
     @staticmethod
     def generate_dsa(fname):
-        enckey , sigkey = crypto.ElGamalGenerate(), crypto.DSAGenerate()
+        dest = Destination()
         with open(fname, 'wb') as wf:
-            wf.write(int(CertificateType.NULL.value).to_bytes(1, 'big'))
-            crypto.dump_keypair(enckey, sigkey, wf)
+            wf.write(dest.serialize())
 
     @staticmethod
     def load(fname):
-        enckey, sigkey, cert, edkey = None, None, None, None
         with open(fname, 'rb') as rf:
-            keytype = CertificateType(int.from_bytes(rf.read(1),'big'))
-            if keytype == CertificateType.NULL:
-                enckey, sigkey = crypto.load_keypair(rf)
-                data = rf.read()
-                cert = Certificate()
-        if enckey and sigkey:
-            return Destination(enckey, sigkey, cert)
-        raise I2CPException("failed to load key from {}".format(fname))
+            return Destination(raw=rf.read())
 
     def __str__(self):
         return '[Destination %s %s cert=%s]' % (
             self.base32(), self.base64(),
             self.cert)
 
-    def __init__(self, enckey=None, sigkey=None, cert=None, raw=None, b64=False, edkey=None):
+    def __init__(self, enckey=None, sigkey=None, cert=None, raw=None, b64=False):
         if raw:
-            enckey, sigkey, cert, edkey = self.parse(raw, b64)
+            enckey, sigkey, cert = self._parse(raw, b64)
+        if enckey is None:
+            enckey = cert.enctype.cls() if cert else crypto.ElGamalKey()
+        if sigkey is None:
+            sigkey = cert.sigtype.cls() if cert else crypto.DSAKey()
         self.enckey = enckey
         self.sigkey = sigkey
         self.cert = cert
-        self.edkey = edkey
 
     def sign(self, data):
-        if self.cert.type == CertificateType.NULL:
-            return crypto.DSA_SHA1_SIGN(self.sigkey, data)
+        return self.sigkey.sign(data)
 
     def signature_size(self):
-        if self.cert.type == CertificateType.NULL:
-            return 40
-
-
-    def dsa_verify(self, data, sig):
-        crypto.DSA_SHA1_VERIFY(self.sigkey, data, sig)
+        return self.sigkey.key_type.sig_len
 
     def verify(self, data, sig):
-        if self.cert.type == CertificateType.NULL:
-            self.dsa_verify(data, sig)
-        else:
-            raise exceptions.I2CPException('cannot verify data: unknown key type')
+        return self.sigkey.verify(data, sig)
 
     def __len__(self):
         return len(self.serialize())
 
+    def serialize(self):
+        data = bytes()
+        if self.cert.type == CertificateType.KEY:
+            encpub = self.enckey.get_pubkey()
+            sigpub = self.sigkey.get_pubkey()
+            data += encpub[:min(256, cert.enctype.pubkey_len)]
+            data += '\0' * (max(256, 384-cert.sigtype.pubkey_len) -
+                            min(256, cert.enctype.pubkey_len))
+            data += sigpub[max(256, 384-cert.sigtype.pubkey_len):384]
+            data += self.cert.serialize()
+        elif self.cert.type != CertificateType.MULTI:
+            data += self.enckey.get_pubkey()
+            data += self.sigkey.get_pubkey()
+            data += self.cert.serialize()
+        else:
+            raise NotImplementedError('Multiple certs not yet supported')
+        self._log.debug('serialize len=%d' % len(data))
+        return data
+
     def base32(self):
         data = self.serialize()
         return util.i2p_b32encode(crypto.sha256(data)).decode('ascii')
-
-    def dsa_sign(self, data):
-        return crypto.DSA_SHA1_SIGN(self.sigkey, data)
-
-    def sign(self, data):
-        if self.cert.type == CertificateType.NULL:
-            return self.dsa_sign(data)
-        else:
-            raise exceptions.I2CPException('cannot sign data: unknown key type')
-
-    def serialize(self):
-        data = bytes()
-        if self.cert.type == CertificateType.NULL:
-            data += crypto.elgamal_public_key_to_bytes(self.enckey)
-            data += crypto.dsa_public_key_to_bytes(self.sigkey)
-            data += self.cert.serialize()
-        self._log.debug('serialize len=%d' % len(data))
-        return data
 
     def base64(self):
         return util.i2p_b64encode(self.serialize()).decode('ascii')
@@ -257,7 +280,7 @@ class Lease(object):
         self.ri = ri_hash
         self.tid = tid
         self.end_date = end_date
-        self._log.debug('ri_hash %d bytes'%len(ri_hash))
+        self._log.debug('ri_hash %d bytes' % len(ri_hash))
 
     def serialize(self):
         data = bytearray()
@@ -279,13 +302,17 @@ class LeaseSet(object):
         if raw:
             data = raw
             self.leases = []
-            self.dest = Destination.parse(data)
+            self.dest = Destination(raw=data)
             self._log.debug(self.dest)
+            # Verify that the signature matches the Destination
+            self.sig = raw[-40:]
+            self.dest.verify(raw[:-40], self.sig)
+            # Signature matches, now parse the rest
             data = data[:len(self.dest)]
-            self.enckey = crypto.ElGamalPublicKey(data[:256])
+            self.enckey = crypto.ElGamalKey(raw=data[:256])
             self._log.debug(self.enckey)
             data = data[256:]
-            self.sigkey = crypto.DSAPublicKey(data[:128])
+            self.sigkey = crypto.DSAKey(raw=data[:128])
             self._log.debug(self.sigkey)
             data = data[128:]
             numls = data[0]
@@ -295,8 +322,6 @@ class LeaseSet(object):
                 data = data[44:]
                 numls -= 1
                 self.leases.append(l)
-            self.sig = raw[:-40]
-            self.dest.dsa_verify(raw[-40:], self.sig)
         else:
             self.dest = dest
             self.enckey = ls_enckey
@@ -306,8 +331,8 @@ class LeaseSet(object):
     def __str__(self):
         return '[LeaseSet leases=%s enckey=%s sigkey=%s dest=%s]' % (
             self.leases,
-            [crypto.elgamal_public_key_to_bytes(self.enckey)],
-            [crypto.dsa_public_key_to_bytes(self.sigkey)],
+            [crypto.self.enckey.get_pubkey()],
+            [crypto.self.sigkey.get_pubkey()],
             self.dest)
 
     def serialize(self):
@@ -317,24 +342,23 @@ class LeaseSet(object):
         """
         data = bytes()
         data += self.dest.serialize()
-        data += crypto.elgamal_public_key_to_bytes(self.enckey)
-        data += crypto.dsa_public_key_to_bytes(self.sigkey)
-        data += int(len(self.leases)).to_bytes(1,'big')
+        data += self.enckey.get_pubkey()
+        data += self.sigkey.get_pubkey()
+        data += int(len(self.leases)).to_bytes(1, 'big')
         for l in self.leases:
             data += l.serialize()
-        sig = crypto.DSA_SHA1_SIGN(self.sigkey, data)
-        #self.dest.dsa_verify(data, sig, doublehash=False)
+        sig = self.dest.sign(data)
         data += sig
         self._log.debug('LS has length %d' % len(data))
         return data
 
 
-
-class i2cp_protocol(Enum):
+class I2CPProtocol(Enum):
 
     STREAMING = 6
     DGRAM = 17
     RAW = 18
+
 
 class datagram(object):
 
@@ -343,9 +367,10 @@ class datagram(object):
             return self.payload == obj.payload
         return False
 
+
 class raw_datagram(object):
 
-    protocol = i2cp_protocol.RAW
+    protocol = I2CPProtocol.RAW
 
     def __init__(self, dest=None, raw=None, payload=None):
         if raw:
@@ -358,16 +383,17 @@ class raw_datagram(object):
     def serialize(self):
         return self.data
 
+
 class dsa_datagram(datagram):
 
-    protocol = i2cp_protocol.DGRAM
+    protocol = I2CPProtocol.DGRAM
     _log = logging.getLogger('datagram-dsa')
 
     def __init__(self, dest=None, raw=None, payload=None):
         if raw:
             self._log.debug('rawlen=%d' % len(raw))
             self.data = raw
-            self._log.debug('load dgram data: %s' %[ raw ])
+            self._log.debug('load dgram data: %s' % [raw])
             self.dest = Destination(raw=raw)
             self._log.debug('destlen=%s' % self.dest)
             raw = raw[len(self.dest):]
@@ -386,7 +412,7 @@ class dsa_datagram(datagram):
             self.data += self.dest.serialize()
             payload_hash = crypto.sha256(self.payload)
             self.sig = self.dest.sign(payload_hash)
-            self._log.debug('signature=%s' % [ self.sig])
+            self._log.debug('signature=%s' % [self.sig])
             self.data += self.sig
             self.data += payload
 
@@ -394,7 +420,7 @@ class dsa_datagram(datagram):
         return self.data
 
     def __str__(self):
-        return '[DSADatagram payload=%s sig=%s]' % ( self.payload, self.sig)
+        return '[DSADatagram payload=%s sig=%s]' % (self.payload, self.sig)
 
 
 class i2cp_payload(object):
@@ -403,28 +429,28 @@ class i2cp_payload(object):
 
     _log = logging.getLogger('i2cp_payload')
 
-    def __init__(self, raw=None, data=None, srcport=0, dstport=0, proto=i2cp_protocol.RAW):
+    def __init__(self, raw=None, data=None, srcport=0, dstport=0, proto=I2CPProtocol.RAW):
         if raw:
             self.dlen = struct.unpack(b'>I', raw[:4])[0]
-            self._log.debug('payload len=%d' %self.dlen)
+            self._log.debug('payload len=%d' % self.dlen)
             data = raw[4:self.dlen]
-            self._log.debug('compressed payload len=%d' %len(data))
+            self._log.debug('compressed payload len=%d' % len(data))
             assert data[:3] == self.gz_header
             self.flags = data[3]
             self.srcport = struct.unpack(b'>H', data[4:6])[0]
             self.dstport = struct.unpack(b'>H', data[6:8])[0]
             self.xflags = data[8]
-            self.proto = i2cp_protocol(util.get_as_int(data[9]))
+            self.proto = I2CPProtocol(util.get_as_int(data[9]))
             self.data = util.i2p_decompress(data[10:])
             self._log.debug('decompressed=%s' % [self.data])
         else:
             if util.check_portnum(srcport) and util.check_portnum(dstport):
-                self._log.debug('payload data len=%d' %len(data))
+                self._log.debug('payload data len=%d' % len(data))
                 self.data = util.i2p_compress(data)
                 self._log.debug('compressed payload len=%d' % len(self.data))
                 self.srcport = srcport
                 self.dstport = dstport
-                self.proto = i2cp_protocol(proto)
+                self.proto = I2CPProtocol(proto)
                 self.flags = 0
                 self.xflags = 2
             else:
@@ -442,7 +468,6 @@ class i2cp_payload(object):
         dlen = len(data)
         self._log.debug('serialize len=%d' % dlen)
         return struct.pack(b'>I', dlen) + data
-
 
     def __str__(self):
         return '[Payload flags=%s srcport=%s dstport=%s xflags=%s proto=%s data=%s]' % (
