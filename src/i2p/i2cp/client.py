@@ -104,7 +104,7 @@ class Connection(object):
         # host lookups
         self._host_lookups = dict()
         # create encryption key for LS per session
-        self._enckey = crypto.ElGamalGenerate()
+        self._enckey = crypto.ElGamalKey()
         # session handlers
         self._msg_handlers = {
             messages.MessageType.SessionStatus : self._msg_handle_session_status,
