@@ -25,7 +25,7 @@ class TestKeyCertificate(TestCase):
         assert_KeyCert_DSA_ElGamal(cert)
 
     def test_create_and_serialize(self):
-        cert = datatypes.KeyCertificate(DSA_ELGAMAL_KEY_CERT_PAYLOAD)
+        cert = datatypes.KeyCertificate(DSA_ELGAMAL_KEY_CERT_PAYLOAD, b64=True)
         assert_KeyCert_DSA_ElGamal(cert)
         assert cert.serialize(True) == DSA_ELGAMAL_KEY_CERT
 

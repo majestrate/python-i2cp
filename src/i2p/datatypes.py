@@ -95,7 +95,7 @@ class Certificate(object):
 
     _log = logging.getLogger('Certificate')
 
-    def _parse(self, data, b64=True):
+    def _parse(self, data, b64=False):
         self._log.debug('cert data len=%d' % len(data))
         if b64:
             data = util.i2p_b64decode(data)
@@ -105,7 +105,7 @@ class Certificate(object):
         clen = struct.unpack(b'>H', data[1:3])[0]
         return ctype, data[3:3+clen]
 
-    def __init__(self, type=CertificateType.NULL, data=bytes(), raw=None, b64=True):
+    def __init__(self, type=CertificateType.NULL, data=bytes(), raw=None, b64=False):
         if raw:
             type, data = self._parse(raw, b64)
         if isinstance(type, int):
@@ -137,7 +137,7 @@ class KeyCertificate(Certificate):
 
     _log = logging.getLogger('KeyCertificate')
 
-    def __init__(self, data=bytes(), raw=None, b64=True):
+    def __init__(self, data=bytes(), raw=None, b64=False):
         super().__init__(CertificateType.KEY, data, raw, b64)
         if len(self.data) < 4:
             raise ValueError("data too short")
@@ -176,13 +176,13 @@ class Destination(object):
 
     _log = logging.getLogger('Destination')
 
-    def _parse(self, data, b64=True):
+    def _parse(self, data, b64=False):
         self._log.debug('dest data len=%d' % len(data))
         if b64:
             data = util.i2p_b64decode(data)
         if len(data) < 387:
             raise ValueError('invalid Destination')
-        cert = Certificate(raw=data[384:], b64=False)
+        cert = Certificate(raw=data[384:])
         if cert.type == CertificateType.NULL:
             return crypto.ElGamalKey(raw=data[:256]), crypto.DSAKey(raw=data[256:384]), cert, None
 

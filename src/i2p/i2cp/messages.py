@@ -148,7 +148,7 @@ class HostLookupReplyMessage(Message):
             self.code = util.get_as_int(self.body[6])
             self.dest = None
             if self.code == 0:
-                self.dest = datatypes.Destination(raw=self.body[7:],b64=False)
+                self.dest = datatypes.Destination(raw=self.body[7:])
 
         else:
             raise NotImplemented()
