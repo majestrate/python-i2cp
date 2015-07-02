@@ -190,84 +190,83 @@ class Destination(object):
         if len(data) < 387:
             raise ValueError('invalid Destination')
         cert = Certificate(raw=data[384:])
-        if cert.type == CertificateType.NULL:
-            return crypto.ElGamalKey(raw=data[:256]), crypto.DSAKey(raw=data[256:384]), cert, None
+        if cert.type == CertificateType.KEY:
+            cert = KeyCertificate(raw=data[384:])
+            # XXX Assume no extra crypto key data
+            return cert.enctype.cls(
+                       raw=data[:min(256, cert.enctype.pubkey_len)]), \
+                   cert.sigtype.cls(
+                       raw=data[max(256, 384-cert.sigtype.pubkey_len):384] +
+                           cert.extra_sigkey_data), \
+                   cert
+        elif cert.type != CertificateType.MULTI:
+            # No KeyCert, so defaults to ElGamal/DSA
+            return crypto.ElGamalKey(raw=data[:256]), \
+                   crypto.DSAKey(raw=data[256:384]), cert
+        else:
+            raise NotImplementedError('Multiple certs not yet supported')
 
     @staticmethod
     def generate_dsa(fname):
-        enckey, sigkey = crypto.ElGamalGenerate(), crypto.DSAKey()
+        dest = Destination()
         with open(fname, 'wb') as wf:
-            wf.write(int(CertificateType.NULL.value).to_bytes(1, 'big'))
-            crypto.dump_keypair(enckey, sigkey, wf)
+            wf.write(dest.serialize())
 
     @staticmethod
     def load(fname):
-        enckey, sigkey, cert, edkey = None, None, None, None
         with open(fname, 'rb') as rf:
-            keytype = CertificateType(int.from_bytes(rf.read(1), 'big'))
-            if keytype == CertificateType.NULL:
-                enckey = ElGamalKey(raw=rf)
-                sigkey = DSAKey(raw=rf)
-                data = rf.read()
-                cert = Certificate()
-        if enckey and sigkey:
-            return Destination(enckey, sigkey, cert)
-        raise I2CPException("failed to load key from {}".format(fname))
+            return Destination(raw=rf.read())
 
     def __str__(self):
         return '[Destination %s %s cert=%s]' % (
             self.base32(), self.base64(),
             self.cert)
 
-    def __init__(self, enckey=None, sigkey=None, cert=None, raw=None, b64=False, edkey=None):
+    def __init__(self, enckey=None, sigkey=None, cert=None, raw=None, b64=False):
         if raw:
-            enckey, sigkey, cert, edkey = self._parse(raw, b64)
+            enckey, sigkey, cert = self._parse(raw, b64)
+        if enckey is None:
+            enckey = cert.enctype.cls() if cert else crypto.ElGamalKey()
+        if sigkey is None:
+            sigkey = cert.sigtype.cls() if cert else crypto.DSAKey()
         self.enckey = enckey
         self.sigkey = sigkey
         self.cert = cert
-        self.edkey = edkey
 
     def sign(self, data):
-        if self.cert.type == CertificateType.NULL:
-            return self.sigkey.sign(data)
+        return self.sigkey.sign(data)
 
     def signature_size(self):
-        if self.cert.type == CertificateType.NULL:
-            return 40
-
-    def dsa_verify(self, data, sig):
-        return self.sigkey.verify(data, sig)
+        return self.sigkey.key_type.sig_len
 
     def verify(self, data, sig):
-        if self.cert.type == CertificateType.NULL:
-            return self.dsa_verify(data, sig)
-        else:
-            raise exceptions.I2CPException('cannot verify data: unknown key type')
+        return self.sigkey.verify(data, sig)
 
     def __len__(self):
         return len(self.serialize())
 
-    def base32(self):
-        data = self.serialize()
-        return util.i2p_b32encode(crypto.sha256(data)).decode('ascii')
-
-    def dsa_sign(self, data):
-        return self.sigkey.sign(data)
-
-    def sign(self, data):
-        if self.cert.type == CertificateType.NULL:
-            return self.dsa_sign(data)
-        else:
-            raise exceptions.I2CPException('cannot sign data: unknown key type')
-
     def serialize(self):
         data = bytes()
-        if self.cert.type == CertificateType.NULL:
+        if self.cert.type == CertificateType.KEY:
+            encpub = self.enckey.get_pubkey()
+            sigpub = self.sigkey.get_pubkey()
+            data += encpub[:min(256, cert.enctype.pubkey_len)]
+            data += '\0' * (max(256, 384-cert.sigtype.pubkey_len) -
+                            min(256, cert.enctype.pubkey_len))
+            data += sigpub[max(256, 384-cert.sigtype.pubkey_len):384]
+            data += self.cert.serialize()
+        elif self.cert.type != CertificateType.MULTI:
             data += self.enckey.get_pubkey()
             data += self.sigkey.get_pubkey()
             data += self.cert.serialize()
+        else:
+            raise NotImplementedError('Multiple certs not yet supported')
         self._log.debug('serialize len=%d' % len(data))
         return data
+
+    def base32(self):
+        data = self.serialize()
+        return util.i2p_b32encode(crypto.sha256(data)).decode('ascii')
 
     def base64(self):
         return util.i2p_b64encode(self.serialize()).decode('ascii')
@@ -307,7 +306,7 @@ class LeaseSet(object):
             self._log.debug(self.dest)
             # Verify that the signature matches the Destination
             self.sig = raw[-40:]
-            self.dest.dsa_verify(raw[:-40], self.sig)
+            self.dest.verify(raw[:-40], self.sig)
             # Signature matches, now parse the rest
             data = data[:len(self.dest)]
             self.enckey = crypto.ElGamalKey(raw=data[:256])
@@ -348,8 +347,7 @@ class LeaseSet(object):
         data += int(len(self.leases)).to_bytes(1, 'big')
         for l in self.leases:
             data += l.serialize()
-        sig = self.dest.dsa_sign(data)
-        #self.dest.dsa_verify(data, sig, doublehash=False)
+        sig = self.dest.sign(data)
         data += sig
         self._log.debug('LS has length %d' % len(data))
         return data

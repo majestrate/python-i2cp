@@ -61,7 +61,7 @@ class TestLeaseSet(TestCase):
         lease = datatypes.Lease(b'f'*32, 1, datatypes.Date(1))
         ls = datatypes.LeaseSet(dest=dest, ls_enckey=crypto.ElGamalKey(), ls_sigkey=crypto.DSAKey(), leases=[lease])
         data = ls.serialize()
-        dest.dsa_verify(data[:-40], data[-40:])
+        dest.verify(data[:-40], data[-40:])
 
     def test_parse(self):
         dest = datatypes.Destination(crypto.ElGamalKey(), crypto.DSAKey(), datatypes.Certificate())

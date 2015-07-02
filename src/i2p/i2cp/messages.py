@@ -172,7 +172,7 @@ class CreateSessionMessage(Message):
             data += _dest
             data += opts
             data += session_date
-            data += dest.dsa_sign(data)
+            data += dest.sign(data)
             type = MessageType.CreateSession
             Message.__init__(self, type, data)
 
