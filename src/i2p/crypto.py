@@ -54,9 +54,9 @@ class Key(object):
         self.key_type = key_type
         if pub or priv:
             if pub is not None and len(pub) != key_type.pubkey_len:
-                raise ValueError('pub key material is wrong length')
+                raise ValueError('pub key material is wrong length: %d instead of %d' % (len(pub), key_type.pubkey_len))
             if priv is not None and len(priv) != key_type.privkey_len:
-                raise ValueError('priv key material is wrong length')
+                raise ValueError('priv key material is wrong length: %d instead of %d' % (len(priv), key_type.privkey_len))
             # load a key from raw bytes
             key = self._parse(pub, priv)
         elif key is None:

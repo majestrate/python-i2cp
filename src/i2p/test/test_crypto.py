@@ -49,3 +49,12 @@ class TestDSAKey(SigningKeyMixin, TestCase):
 class TestECDSA256Key(SigningKeyMixin, TestCase):
 
     cls = crypto.ECDSA256Key
+
+    def test_serialize_and_parse_stress(self):
+        # Sometimes test_serialize_and_parse() fails with wrong pubkey length.
+        # This test should make it happen more frequently.
+        for i in range(0, 1000):
+            key = crypto.ECDSA256Key()
+            pubkey = self.key.get_pubkey()
+            privkey = self.key.get_privkey()
+            key2 = self.cls(pubkey, privkey)
