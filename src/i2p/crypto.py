@@ -4,6 +4,7 @@ from builtins import *
 from Crypto.Hash import SHA, SHA256
 from Crypto.PublicKey import ElGamal, DSA
 from Crypto.Random.random import StrongRandom as random
+from Crypto.Util import asn1
 from pyelliptic.ecc import ECC
 from enum import Enum
 #import nacl.signing as nacl
@@ -281,8 +282,8 @@ class ECDSAKey(SigningKey):
     def _get_pubkey(self):
         pubkey = bytes()
         part_len = int(self.key_type.pubkey_len/2)
-        pubkey += pad_keypart(self.key.pubkey_x, part_len)
-        pubkey += pad_keypart(self.key.pubkey_y, part_len)
+        pubkey += rectify(self.key.pubkey_x, part_len)
+        pubkey += rectify(self.key.pubkey_y, part_len)
         return pubkey
 
     def _get_privkey(self):
@@ -291,13 +292,11 @@ class ECDSAKey(SigningKey):
     def _sign(self, data):
         """Generate ECDSA signature."""
         sig = self.key.sign(data)
-        assert len(sig) == self.key_type.sig_len
-        return sig
+        return asn1_to_sig_bytes(sig, self.key_type.sig_len)
 
     def _verify(self, data, sig):
         """Verify ECDSA signature."""
-        assert len(sig) == self.key_type.sig_len
-        return self.key.verify(sig, data)
+        return self.key.verify(sig_bytes_to_asn1(sig), data)
 
 class ECDSA256Key(ECDSAKey):
 
@@ -484,15 +483,29 @@ def dump_keypair(enckey, sigkey, fd):
     fd.write(enckey.serialize())
     fd.write(sigkey.serialize())
 
-def pad_keypart(keypart, tolen):
-    if len(keypart) < tolen:
-        return b'\0' * (tolen - len(keypart))
-    elif len(keypart) > tolen:
-        if len(keypart) > tolen+1 or keypart[0] != 0:
-            raise ValueError('key too big to fit in %d: %s' % (tolen, keypart))
-        return keypart[1:]
-    else:
-        return keypart
+
+def sig_bytes_to_asn1(sig):
+    part_len = int(len(sig)/2)
+    r = int.from_bytes(sig[:part_len], 'big')
+    s = int.from_bytes(sig[part_len:], 'big')
+    der = asn1.DerSequence()
+    der.append(r)
+    der.append(s)
+    return der.encode()
+
+
+def asn1_to_sig_bytes(asn, tolen):
+    der = asn1.DerSequence()
+    der.decode(asn)
+    sig = bytes()
+    part_len = int(tolen/2)
+    sig += der[0].to_bytes(part_len, 'big')
+    sig += der[1].to_bytes(part_len, 'big')
+    return sig
+
+
+def rectify(part, tolen):
+    return int.from_bytes(part, 'big').to_bytes(tolen, 'big')
 
 
 if __name__ == '__main__':
