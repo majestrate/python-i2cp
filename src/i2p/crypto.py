@@ -239,7 +239,7 @@ class DSAKey(SigningKey):
         return self.key.has_private()
 
     def _to_public(self):
-        return DSAKey(key=DSAKey._construct(key.y, None))
+        return DSAKey(key=DSAKey._construct(self.key.y, None))
 
     def _get_pubkey(self):
         return int(self.key.y).to_bytes(128, 'big')

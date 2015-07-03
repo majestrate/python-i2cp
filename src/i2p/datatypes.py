@@ -267,7 +267,7 @@ class Destination(object):
                     sigkey.key_type == crypto.SigType.DSA_SHA1:
                 cert = Certificate()
             else:
-                cert = KeyCertificate(enckey, sigkey)
+                cert = KeyCertificate(sigkey, enckey)
         elif rebuild_cert:
             if cert.type == CertificateType.MULTI:
                 raise NotImplementedError('Multiple certs not yet supported')
@@ -280,7 +280,7 @@ class Destination(object):
                     cert.type != CertificateType.KEY:
                 raise NotImplementedError('Multiple certs not yet supported')
             else:
-                cert = KeyCertificate(enckey, sigkey)
+                cert = KeyCertificate(sigkey, enckey)
 
         self.enckey = enckey
         self.sigkey = sigkey
