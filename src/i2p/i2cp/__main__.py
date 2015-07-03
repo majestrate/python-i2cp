@@ -15,21 +15,35 @@ class Handler(I2CPHandler):
 
     _log = logging.getLogger('handler')
 
-    def __init__(self, dest, data, delay=1.5):
-        self.dest = dest
+    def __init__(self, name, data, delay=1.5):
+        self.name = name
         self.data = data
         self._delay = delay * 1.0
-
+        self._dest = None
+        self._ready = False
+        
     def got_dgram(self, dest, data, srcport, dstport):
         self._log.info('got dgram from {}:{} to port {} : {}'.format (
             dest, srcport, dstport, [data]))
 
+    def _lookup_reply(self, dest):
+        if dest:
+            self._log.info("we resolved our name to a destination")
+            self._dest = dest
+    
     def _send(self):
-        if self.dest is not None:
-            self.conn.send_dgram(self.dest, self.data)
-            asyncio.get_event_loop().call_later(self._delay, self._send)
+        if self.name:
+            if self._dest is None:
+                self.conn.lookup_async(self.name, hook=self._lookup_reply)
+            elif self._ready:
+                self._log.info("send datagram")
+                self.conn.send_dgram(self._dest, self.data)
+        asyncio.get_event_loop().call_later(self._delay, self._send)
 
-
+    def session_ready(self, conn):
+        self._log.info("we are ready")
+        self._ready = True
+            
     def session_made(self, conn):
         self.conn = conn
         self._log.info('session made we are {}'.format(conn.dest))

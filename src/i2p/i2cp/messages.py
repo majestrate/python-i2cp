@@ -229,8 +229,8 @@ class CreateLSMessage(Message):
         else:
             body = bytearray()
             body += struct.pack(b'>H', sid)
-            body += crypto.dsa_private_key_to_bytes(sigkey)
-            body += crypto.elgamal_private_key_to_bytes(enckey)
+            body += sigkey.get_privkey()
+            body += enckey.get_privkey()
             body += leaseset.serialize()
             Message.__init__(self, type=MessageType.CreateLS, body=body)
             self.sid = sid
