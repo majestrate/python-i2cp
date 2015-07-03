@@ -30,9 +30,17 @@ class I2CPHandler(object):
     def session_made(self, conn):
         """
         called after an i2cp session is made successfully with the i2p router
+        name lookups can be done
+        messages cannot be sent to other destinations until this handler's session_ready is called
         :param conn: underlying connection
         """
 
+    def session_ready(self, conn):
+        """
+        called when an i2cp session has tunnels built and is ready to send messages to other destinations
+        :param conn: underlying connection
+        """
+        
     def session_refused(self):
         """
         called when the i2p router refuses a session
@@ -77,7 +85,8 @@ class PrintDestinationHandler(I2CPHandler):
 class Connection(object):
 
     _log = logging.getLogger('I2CP-Connection')
-
+    # i2cp version to report
+    _i2cp_version = '0.9.20'
 
     def __init__(self, handler=None, session_options={}, keyfile='i2cp.key', i2cp_host='127.0.0.1', i2cp_port=7654, loop=None):
         # host, port of i2cp interface
@@ -87,11 +96,13 @@ class Connection(object):
         # unused
         self._lookup = None
         self._done = False
-        # our destination
+        # Our destination. Contains our private keys.
         self.dest = None
         # state stuff
         self._connected = False
         self._created = False
+        # tunnels are ready
+        self._ready = False
         # session handler
         self.handler = handler or I2CPHandler()
         # keyfile
@@ -158,31 +169,36 @@ class Connection(object):
                 ftr.set_result(None)
         tsk.add_done_callback(_done_connecting)
         yield From(ftr)
-            
+
     def generate_dest(self, keyfile):
         if not os.path.exists(keyfile):
-            datatypes.Destination.generate_dsa(keyfile)
-        self.dest = datatypes.Destination.load(keyfile)
+            with open(keyfile, 'wb') as wf:
+                wf.write(datatypes.Destination().serialize(priv=True))
+        with open(keyfile, 'rb') as rf:
+            self.dest = datatypes.Destination(raw=rf)
 
-    def lookup_async(self, name, ftr):
+    def lookup_async(self, name, ftr=None, hook=None):
         """
         lookup name asynchronously
+        :param ftr: a future that recv's the destination or None if the lookup failed
+        :param hook: a function that takes 1 parameter, the destination found or None if the lookup failed
         """
-        self._log.info('async lookup {}'.format(name))
-        msg = messages.HostLookupMessage(name=name, sid=self._sid)
-        self._host_lookups[msg.rid] = ftr, name
-        self._log.debug('put rid {}'.format(msg.rid))
-        self._loop.call_soon_threadsafe(self._async, self._send_msg(msg))
+        if name and isinstance(name, str):
+            self._log.info('async lookup {}'.format(name))
+            msg = messages.HostLookupMessage(name=name, sid=self._sid)
+            self._host_lookups[msg.rid] = ftr, name, hook
+            self._log.debug('put rid {}'.format(msg.rid))
+            self._loop.call_soon_threadsafe(self._async, self._send_msg(msg))
 
     def _has_lookup_job(self, name):
         """
         :return: true if we are currently looking up a name
         """
-        for _, _name in self._host_lookups.values():
+        for _ftr, _name, _hook in self._host_lookups.values():
             if name == _name:
                 return True
         return False
-        
+
     def _async(self, coro):
         """
         do stuff thread safe async
@@ -230,16 +246,16 @@ class Connection(object):
             # call again
             self._async(self._recv_process())
         raise Return()
-            
+
     def _begin_session(self):
         """
         begin i2cp session after sending protocol byte
         """
         self._log.debug('begin_session()')
         # fire off get date message
-        msg = messages.GetDateMessage()
+        msg = messages.GetDateMessage(version=self._i2cp_version)
         self._async(self._send_msg(msg))
-        # start recving messages 
+        # start recving messages
         self._async(self._recv_process())
 
 
@@ -264,7 +280,7 @@ class Connection(object):
         self._log.debug('send %d bytes' % len(data))
         self._log.debug('--> {}'.format( [data]))
         raise Return(self._writer.drain())
-        
+
     @asyncio.coroutine
     def _send_msg(self, msg):
         if msg:
@@ -290,7 +306,21 @@ class Connection(object):
         self._log.warn('session disconnected from i2p router: {}'.format(reason))
         self._async(self.handler.disconnected(reason))
         self.close()
-        raise Return()
+
+    def _tunnels_ready(self):
+        """
+        tell handler that the tunnels for our session have been built
+        does nothing if called previously
+        """
+        if not self._ready:
+            # tunnels are now ready
+            self._ready = True
+            try:
+                self.handler.session_ready(self)
+            except Exception as e:
+                self._log.error("error while informing handler of session_ready(): {}".format(e))
+            
+                
 
     def _msg_handle_request_var_ls(self, msg):
         """
@@ -312,8 +342,8 @@ class Connection(object):
             enckey=self._enckey,
             leaseset=ls)
         self._log.debug('made message')
-        yield From(self._send_msg(msg))
-
+        self._async(self._send_msg(msg))
+        self._tunnels_ready()
 
     def _msg_handle_request_ls(self, msg):
         """
@@ -328,8 +358,9 @@ class Connection(object):
             sigkey=sigkey,
             enckey=enckey,
             leaseset=ls)
-        yield From(self._send_msg(msg))
-
+        self._async(self._send_msg(msg))
+        
+        
     def _msg_handle_message_payload(self, msg):
         """
         handle message payload message
@@ -354,16 +385,22 @@ class Connection(object):
         """
         self._log.debug('hlr rid={}'.format(msg.rid))
         if msg.rid in self._host_lookups:
-            ftr, name = self._host_lookups[msg.rid]
+            ftr, name, hook = self._host_lookups[msg.rid]
             if msg.dest is not None:
                 self._put_dest_cache(name, msg.dest)
                 self._log.debug('got dest: {}'.format(msg.dest))
-                if not ftr.done():
-                    ftr.set_result(msg.dest)
-            else:
-                ftr.set_result(None)
-            self._host_lookups.pop(msg.rid)
 
+            self._host_lookups.pop(msg.rid)
+            # set future's value if it's there
+            if ftr:
+                ftr.set_result(msg.dest)
+            # call hook if it's there
+            try:
+                if hook:
+                    hook(msg.dest)
+            except Exception as e:
+                self._log.error("failed to call hook for async lookup response: {}".format(e))
+            
     def _msg_handle_session_status(self, msg):
         """
         handle session status message
@@ -378,7 +415,7 @@ class Connection(object):
             else:
                 self.handler.session_refused()
         except Exception as e:
-            self._log.error("failed to handle session status message")
+            self._log.error("failed to handle session status message {}".format(e))
 
     def send_packet(self, name, packet, srcport=0, dstport=0):
         """
@@ -412,11 +449,13 @@ class Connection(object):
 
     def _send_dgram(self, dgram_class, name, data, srcport=0, dstport=0):
         # check out destination cache
-        dest = self._check_dest_cache(name)
+        if isinstance(name, str) or isinstance(name, bytes):
+            dest = self._check_dest_cache(name)
+        elif isinstance(name, datatypes.Destination):
+            dest = name
         # ensure the data is bytes
         if not isinstance(data, bytes):
             data = bytearray(data, 'utf-8')
-
         # if we don't have the destination in our cache
         # look it up
         # drop packets until we find it
@@ -439,7 +478,7 @@ class Connection(object):
             ftr = asyncio.Future(loop=self._loop)
             self._loop.call_soon(self.lookup_async, name, ftr)
 
-            
+
     def _check_dest_cache(self, name):
         """
         :param dest:
@@ -468,7 +507,7 @@ class Connection(object):
             self.handler.session_done()
         except Exception as e:
             self._log.error("failed to call self.handler.session_done(): {}".format(e))
-        
+
     def done(self):
         """
         :return: a future that ends when this connection is done

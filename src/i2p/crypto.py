@@ -24,9 +24,9 @@ dsa_q = int('A5DFC28FEF4CA1E286744CD8EED9D29D684046B7', 16)
 dsa_g = int('0C1F4D27D40093B429E962D7223824E0BBC47E7C832A39236FC683AF84889581075FF9082ED32353D4374D7301CDA1D23C431F4698599DDA02451824FF369752593647CC3DDC197DE985E43D136CDCFC6BD5409CD2F450821142A5E6F8EB1C3AB5D0484B8129FCF17BCE4F7F33321C3CB3DBB14A905E7B2B3E93BE4708CBCC82', 16)
 DSA_SHA1_SPEC = (dsa_g, dsa_p, dsa_q)
 
-P256_SPEC = None
-P384_SPEC = None
-P521_SPEC = None
+P256_SPEC = 'prime256v1'
+P384_SPEC = 'secp384r1'
+P521_SPEC = 'secp521r1'
 F4_2048_SPEC = None
 F4_3072_SPEC = None
 F4_4096_SPEC = None
@@ -44,22 +44,26 @@ def sha256(x): return SHA256.new(x).digest()
 class Key(object):
     """Base class for keys."""
 
-    def __init__(self, key_type, key=None, raw=None):
+    def __init__(self, key_type, pub=None, priv=None, key=None):
         """Create a key of type key_type.
 
+        If pub or priv are set, creates a Key using the provided key material.
         If key is set, creates a Key using the provided key.
-        If raw is set, creates a Key using data parsed from raw.
-        If neither is set, generates a new Key.
+        If no kwargs are provided, generates a new Key.
         """
         self.key_type = key_type
-        if raw:
+        if pub or priv:
+            if pub is not None and len(pub) != key_type.pubkey_len:
+                raise ValueError('pub key material is wrong length: %d instead of %d' % (len(pub), key_type.pubkey_len))
+            if priv is not None and len(priv) != key_type.privkey_len:
+                raise ValueError('priv key material is wrong length: %d instead of %d' % (len(priv), key_type.privkey_len))
             # load a key from raw bytes
-            key = self._parse(raw)
+            key = self._parse(pub, priv)
         elif key is None:
             # generate a new key
             key = self._generate()
         if isinstance(key, bytes):
-            raise TypeError('Pass in raw key material with the raw= kwarg')
+            raise TypeError('Pass in key material with the pub= and priv= kwargs')
         self.key = key
 
     def has_private(self):
@@ -82,13 +86,6 @@ class Key(object):
         if not self.has_private():
             raise TypeError('Private key not available in this object')
         return self._get_privkey()
-
-    def serialize(self):
-        """Get the serialized public and private key material.
-
-        This is not necessarily the same as get_pubkey() + get_privkey()
-        """
-        return self._serialize()
 
 
 class CryptoKey(Key):
@@ -138,26 +135,20 @@ class SigningKey(Key):
 
 class ElGamalKey(CryptoKey):
 
-    def __init__(self, key=None, raw=None):
+    def __init__(self, pub=None, priv=None, key=None):
         """Construct an ElGamal-2048 encryption key.
 
         With no arguments, generates a new ElGamalKey.
+        If pub or priv are set, creates an ElGamalKey using provided key material.
         If key is set, creates an ElGamalKey using the provided key.
-        If raw is set, creates an ElGamalKey using data parsed from raw.
         """
-        super().__init__(EncType.ELGAMAL_2048, key, raw)
+        super().__init__(EncType.ELGAMAL_2048, pub, priv, key)
 
     @staticmethod
-    def _parse(raw):
+    def _parse(pub, priv=None):
         """Parse key data"""
-        if hasattr(raw, 'read'):
-            y = raw.read(256)
-            x = raw.read(256)
-        else:
-            y = raw[:256]
-            x = raw[256:512] if len(raw) == 512 else None
-        y = int.from_bytes(y, 'big')
-        x = int.from_bytes(x, 'big') if x else None
+        y = int.from_bytes(pub, 'big')
+        x = int.from_bytes(priv, 'big') if priv else None
         return ElGamalKey._construct(y, x)
 
     @staticmethod
@@ -179,19 +170,13 @@ class ElGamalKey(CryptoKey):
         return self.key.has_private()
 
     def _to_public(self):
-        return ElGamalKey(ElGamalKey._construct(key.y, None))
+        return ElGamalKey(key=ElGamalKey._construct(key.y, None))
 
     def _get_pubkey(self):
         return int(self.key.y).to_bytes(256, 'big')
 
     def _get_privkey(self):
         return int(self.key.x).to_bytes(256, 'big')
-
-    def _serialize(self):
-        data = bytes()
-        data += int(self.key.y).to_bytes(256, 'big')
-        data += int(self.key.x).to_bytes(256, 'big')
-        return data
 
     def _encrypt(self, plaintext):
         raise NotImplementedError
@@ -200,32 +185,22 @@ class ElGamalKey(CryptoKey):
         raise NotImplementedError
 
 
-class DSAException(Exception):
-    pass
-
-
 class DSAKey(SigningKey):
 
-    def __init__(self, key=None, raw=None):
+    def __init__(self, pub=None, priv=None, key=None):
         """Construct a DSA-SHA1 signing key.
 
         With no arguments, generates a new DSAKey.
+        If pub or priv are set, creates a DSAKey using provided key material.
         If key is set, creates a DSAKey using the provided key.
-        If raw is set, creates a DSAKey using data parsed from raw.
         """
-        super().__init__(SigType.DSA_SHA1, key, raw)
+        super().__init__(SigType.DSA_SHA1, pub, priv, key)
 
     @staticmethod
-    def _parse(raw):
+    def _parse(pub, priv=None):
         """Parse key data"""
-        if hasattr(raw, 'read'):
-            y = raw.read(128)
-            x = raw.read(128)
-        else:
-            y = raw[:128]
-            x = raw[128:256] if len(raw) == 256 else None
-        y = int.from_bytes(y, 'big')
-        x = int.from_bytes(x, 'big') if x else None
+        y = int.from_bytes(pub, 'big')
+        x = int.from_bytes(priv, 'big') if priv else None
         return DSAKey._construct(y, x)
 
     @staticmethod
@@ -247,20 +222,13 @@ class DSAKey(SigningKey):
         return self.key.has_private()
 
     def _to_public(self):
-        return DSAKey(DSAKey._construct(key.y, None))
+        return DSAKey(key=DSAKey._construct(self.key.y, None))
 
     def _get_pubkey(self):
         return int(self.key.y).to_bytes(128, 'big')
 
     def _get_privkey(self):
         return int(self.key.x).to_bytes(20, 'big')
-
-    def _serialize(self):
-        data = bytes()
-        data += int(self.key.y).to_bytes(128, 'big')
-        # XXX Why is private key padded here?
-        data += int(self.key.x).to_bytes(128, 'big')
-        return data
 
     def _sign(self, data):
         """Generate DSA-SHA1 signature."""
@@ -274,6 +242,73 @@ class DSAKey(SigningKey):
         data = sha1(data)
         R, S = int.from_bytes(sig[:20], 'big'), int.from_bytes(sig[20:], 'big')
         return self.key.verify(data, (R, S))
+
+
+class ECDSAKey(SigningKey):
+
+    def __init__(self, key_type, pub=None, priv=None, key=None):
+        """Construct an ECDSA signing key.
+
+        With no arguments, generates a new ECDSAKey.
+        If pub or priv are set, creates an ECDSAKey using provided key material.
+        If key is set, creates an ECDSAKey using the provided key.
+        """
+        if key_type.base_algo != SigAlgo.EC:
+            raise ValueError('Invalid key_type')
+        super().__init__(key_type, pub, priv, key)
+
+    def _parse(self, pub, priv=None):
+        """Parse key data"""
+        mid = int(self.key_type.pubkey_len/2)
+        x = pub[:mid]
+        y = pub[mid:]
+        return ECC(pubkey_x=x, pubkey_y=y, raw_privkey=priv,
+                   curve=self.key_type.spec)
+
+    def _generate(self):
+        """Generate an ECDSA key pair."""
+        return ECC(curve=self.key_type.spec)
+
+    def _has_private(self):
+        return self.key.privkey is not None
+
+    def _to_public(self):
+        return ECDSAKey(self.key_type,
+                        key=ECC(pubkey_x=self.key.pubkey_x,
+                                pubkey_y=self.key.pubkey_y,
+                                curve=self.key_type.spec))
+
+    def _get_pubkey(self):
+        pubkey = bytes()
+        part_len = int(self.key_type.pubkey_len/2)
+        pubkey += pad_keypart(self.key.pubkey_x, part_len)
+        pubkey += pad_keypart(self.key.pubkey_y, part_len)
+        return pubkey
+
+    def _get_privkey(self):
+        return self.key.privkey
+
+    def _sign(self, data):
+        """Generate ECDSA signature."""
+        sig = self.key.sign(data)
+        assert len(sig) == self.key_type.sig_len
+        return sig
+
+    def _verify(self, data, sig):
+        """Verify ECDSA signature."""
+        assert len(sig) == self.key_type.sig_len
+        return self.key.verify(sig, data)
+
+class ECDSA256Key(ECDSAKey):
+
+    def __init__(self, pub=None, priv=None, key=None):
+        """Construct an ECDSA-SHA256-P256 signing key.
+
+        With no arguments, generates a new ECDSA256Key.
+        If pub or priv are set, creates an ECDSA256Key using provided key material.
+        If key is set, creates an ECDSA256Key using the provided key.
+        """
+        super().__init__(SigType.ECDSA_SHA256_P256, pub, priv, key)
 
 
 #
@@ -349,7 +384,7 @@ class EncType(Enum):
 
 class SigType(Enum):
     DSA_SHA1 = (0, 128, 20, 20, 40, SigAlgo.DSA, "SHA-1", "SHA1withDSA", DSA_SHA1_SPEC, "0", DSAKey)
-    ECDSA_SHA256_P256 = (1, 64, 32, 32, 64, SigAlgo.EC, "SHA-256", "SHA256withECDSA", P256_SPEC, "0.9.12", None)
+    ECDSA_SHA256_P256 = (1, 64, 32, 32, 64, SigAlgo.EC, "SHA-256", "SHA256withECDSA", P256_SPEC, "0.9.12", ECDSA256Key)
     ECDSA_SHA384_P384 = (2, 96, 48, 48, 96, SigAlgo.EC, "SHA-384", "SHA384withECDSA", P384_SPEC, "0.9.12", None)
     ECDSA_SHA512_P521 = (3, 132, 66, 64, 132, SigAlgo.EC, "SHA-512", "SHA512withECDSA", P521_SPEC, "0.9.12", None)
     RSA_SHA256_2048 = (4, 256, 512, 32, 256, SigAlgo.RSA, "SHA-256", "SHA256withRSA", F4_2048_SPEC, "0.9.12", None)
@@ -448,6 +483,16 @@ def gen_keypair(fd):
 def dump_keypair(enckey, sigkey, fd):
     fd.write(enckey.serialize())
     fd.write(sigkey.serialize())
+
+def pad_keypart(keypart, tolen):
+    if len(keypart) < tolen:
+        return b'\0' * (tolen - len(keypart))
+    elif len(keypart) > tolen:
+        if len(keypart) > tolen+1 or keypart[0] != 0:
+            raise ValueError('key too big to fit in %d: %s' % (tolen, keypart))
+        return keypart[1:]
+    else:
+        return keypart
 
 
 if __name__ == '__main__':

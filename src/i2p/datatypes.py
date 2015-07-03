@@ -4,6 +4,7 @@ import logging
 import struct
 import time
 
+from Crypto.Random.random import StrongRandom as random
 from enum import Enum
 
 from . import crypto
@@ -95,15 +96,29 @@ class Certificate(object):
 
     _log = logging.getLogger('Certificate')
 
-    def _parse(self, data, b64=False):
-        self._log.debug('cert data len=%d' % len(data))
+    def _parse(self, raw, b64=False):
         if b64:
-            data = util.i2p_b64decode(data)
-        if len(data) < 3:
-            raise ValueError('invalid Certificate')
-        ctype = CertificateType(util.get_as_int(data[0]))
-        clen = struct.unpack(b'>H', data[1:3])[0]
-        return ctype, data[3:3+clen]
+            if hasattr(raw, 'read'):
+                raise TypeError('b64 flag is incompatible with stream data')
+            raw = util.i2p_b64decode(raw)
+        # TODO handle length in both cases
+        #if len(raw) < 3:
+        #    raise ValueError('invalid Certificate')
+        if hasattr(raw, 'read'):
+            ctype = raw.read(1)
+            clen = raw.read(2)
+        else:
+            ctype = raw[0]
+            clen = raw[1:3]
+            raw = raw[3:]
+        ctype = CertificateType(util.get_as_int(ctype))
+        clen = struct.unpack(b'>H', clen)[0]
+        if hasattr(raw, 'read'):
+            data = raw.read(clen)
+        else:
+            data = raw[:clen]
+            raw = raw[clen:]
+        return ctype, data
 
     def __init__(self, type=CertificateType.NULL, data=bytes(), raw=None, b64=False):
         if raw:
@@ -120,6 +135,12 @@ class Certificate(object):
 
     def __str__(self):
         return '[cert type=%s data=%s]' % (self.type.name, self.data)
+
+    def upconvert(self):
+        if self.type == CertificateType.KEY:
+            return KeyCertificate(data=self.data)
+        else:
+            return self
 
     def serialize(self, b64=False):
         data = bytearray()
@@ -140,13 +161,17 @@ class KeyCertificate(Certificate):
             data = self._data_from_keys(sigkey, enckey)
         super().__init__(CertificateType.KEY, data, raw, b64)
         if len(self.data) < 4:
-            raise ValueError("data too short")
+            raise ValueError("data too short: %s" % self.data)
 
     @staticmethod
     def _data_from_keys(sigkey, enckey):
+        if not isinstance(sigkey, crypto.SigningKey):
+            raise TypeError('sigkey is not a SigningKey')
+        if not isinstance(enckey, crypto.CryptoKey):
+            raise TypeError('enckey is not a CryptoKey')
         data = bytes()
-        data += struct.pack(b'>H', sigkey.key_type)
-        data += struct.pack(b'>H', enckey.key_type)
+        data += struct.pack(b'>H', sigkey.key_type.code)
+        data += struct.pack(b'>H', enckey.key_type.code)
         # XXX Assume no extra crypto key data
         sigpub = sigkey.get_pubkey()
         extra = max(0, len(sigpub) - 128)
@@ -183,57 +208,170 @@ class Destination(object):
 
     _log = logging.getLogger('Destination')
 
-    def _parse(self, data, b64=False):
-        self._log.debug('dest data len=%d' % len(data))
+    def __init__(self, enckey=None, sigkey=None, cert=None, padding=bytes(), raw=None, b64=False):
+        """Construct a Destination.
+
+        A Destination can be constructed in several ways:
+
+        1. Generate a Destination with default types
+            Destination()
+
+        2. Generate a Destination with specified types
+            Destination(EncType.EC_P256, SigType.ECDSA_SHA256_P256)
+
+        3. Generate a Destination with one default and one specified type
+            Destination(sigkey=SigType.ECDSA_SHA256_P256)
+
+        4. Generate a Destination using types specified in a KeyCertificate
+           (the KeyCertificate's extra key data is ignored)
+            Destination(cert=keycert)
+
+        5. Read a Destination in from an eepPriv.dat file
+            with open(keyfile, 'rb') as rf:
+                Destination(raw=rf)
+
+        6. Parse a B64 Destination
+            Destination(raw=b64string, b64=True)
+
+        7. Construct a Destination from the provided keys
+            Destination(enckey, sigkey)
+
+        8. Construct a Destination from the provided keys and cert
+            Destination(enckey, sigkey, cert)
+        """
+        if raw:
+            enckey, sigkey, cert, padding = self._parse(raw, b64)
+
+        rebuild_cert = False
+        if enckey is None or isinstance(enckey, crypto.EncType) or \
+                sigkey is None or isinstance(sigkey, crypto.SigType):
+            if enckey is None:
+                if isinstance(cert, KeyCertificate):
+                    enckey = cert.enctype.cls()
+                else:
+                    enckey = crypto.ElGamalKey()
+            elif isinstance(enckey, crypto.EncType):
+                enckey = enckey.cls()
+            if sigkey is None:
+                if isinstance(cert, KeyCertificate):
+                    sigkey = cert.sigtype.cls()
+                else:
+                    sigkey = crypto.DSAKey()
+            elif isinstance(sigkey, crypto.SigType):
+                sigkey = sigkey.cls()
+            rebuild_cert = True
+
+        # Cases:
+        # - cert is None, need NULL -> build NULL
+        # - cert is None, need KEY -> build KEY
+        # - cert is MULTI -> error
+        # - need NULL, cert is KEY -> build NULL
+        # - need NULL, cert is not KEY -> leave
+        # - need KEY, cert is not NULL or KEY -> error
+        # - need KEY -> build KEY
+        if cert is None:
+            if enckey.key_type == crypto.EncType.ELGAMAL_2048 and \
+                    sigkey.key_type == crypto.SigType.DSA_SHA1:
+                cert = Certificate()
+            else:
+                cert = KeyCertificate(sigkey, enckey)
+        elif rebuild_cert:
+            if cert.type == CertificateType.MULTI:
+                raise NotImplementedError('Multiple certs not yet supported')
+            elif enckey.key_type == crypto.EncType.ELGAMAL_2048 and \
+                    sigkey.key_type == crypto.SigType.DSA_SHA1:
+                # Without MULTI+KEY, other certs are assumed to be ElG/DSA
+                if cert.type == CertificateType.KEY:
+                    cert = Certificate()
+            elif cert.type != CertificateType.NULL and \
+                    cert.type != CertificateType.KEY:
+                raise NotImplementedError('Multiple certs not yet supported')
+            else:
+                cert = KeyCertificate(sigkey, enckey)
+
+        self.enckey = enckey
+        self.sigkey = sigkey
+        self.cert = cert
+        self.padding = padding
+
+    def _parse(self, raw, b64=False):
         if b64:
-            data = util.i2p_b64decode(data)
-        if len(data) < 387:
-            raise ValueError('invalid Destination')
-        cert = Certificate(raw=data[384:])
+            if hasattr(raw, 'read'):
+                raise TypeError('b64 flag is incompatible with stream data')
+            raw = util.i2p_b64decode(raw)
+        # TODO handle length in both cases
+        #if len(data) < 387:
+        #    raise ValueError('invalid Destination')
+        if hasattr(raw, 'read'):
+            data = raw.read(384)
+        else:
+            data = raw[:384]
+            raw = raw[384:]
+        cert = Certificate(raw=raw)
+        # If this is an eepPriv.dat, there will be more key material
+        if hasattr(raw, 'read'):
+            rest = raw.read()
+        else:
+            rest = raw[len(cert.serialize()):]
+
         if cert.type == CertificateType.KEY:
-            cert = KeyCertificate(raw=data[384:])
+            cert = cert.upconvert()
             # XXX Assume no extra crypto key data
-            return cert.enctype.cls(
-                       raw=data[:min(256, cert.enctype.pubkey_len)]), \
-                   cert.sigtype.cls(
-                       raw=data[max(256, 384-cert.sigtype.pubkey_len):384] +
-                           cert.extra_sigkey_data), \
-                   cert
+            enc_end = min(256, cert.enctype.pubkey_len)
+            sig_start = max(256, 384-cert.sigtype.pubkey_len)
+            encpub = data[:enc_end]
+            padding = data[enc_end:sig_start]
+            sigpub = data[sig_start:384] + \
+                     cert.extra_sigkey_data
+            if len(rest):
+                encpriv = rest[:cert.enctype.privkey_len]
+                sigpriv = rest[cert.enctype.privkey_len:cert.enctype.privkey_len+cert.sigtype.privkey_len]
+                return cert.enctype.cls(encpub, encpriv), \
+                       cert.sigtype.cls(sigpub, sigpriv), \
+                       cert, \
+                       padding
+            else:
+                return cert.enctype.cls(encpub), \
+                       cert.sigtype.cls(sigpub), \
+                       cert, \
+                       padding
         elif cert.type != CertificateType.MULTI:
             # No KeyCert, so defaults to ElGamal/DSA
-            return crypto.ElGamalKey(raw=data[:256]), \
-                   crypto.DSAKey(raw=data[256:384]), cert
+            encpub = data[:256]
+            sigpub = data[256:384]
+            if len(rest):
+                encpriv = rest[:256]
+                sigpriv = rest[256:276]
+                return crypto.ElGamalKey(encpub, encpriv), \
+                       crypto.DSAKey(sigpub, sigpriv), \
+                       cert, \
+                       bytes()
+            else:
+                return crypto.ElGamalKey(encpub), \
+                       crypto.DSAKey(sigpub), \
+                       cert, \
+                       bytes()
         else:
             raise NotImplementedError('Multiple certs not yet supported')
-
-    @staticmethod
-    def generate_dsa(fname):
-        dest = Destination()
-        with open(fname, 'wb') as wf:
-            wf.write(dest.serialize())
-
-    @staticmethod
-    def load(fname):
-        with open(fname, 'rb') as rf:
-            return Destination(raw=rf.read())
 
     def __str__(self):
         return '[Destination %s %s cert=%s]' % (
             self.base32(), self.base64(),
             self.cert)
 
-    def __init__(self, enckey=None, sigkey=None, cert=None, raw=None, b64=False):
-        if raw:
-            enckey, sigkey, cert = self._parse(raw, b64)
-        if enckey is None:
-            enckey = cert.enctype.cls() if cert else crypto.ElGamalKey()
-        if sigkey is None:
-            sigkey = cert.sigtype.cls() if cert else crypto.DSAKey()
-        if cert is None:
-            cert = Certificate()
-        self.enckey = enckey
-        self.sigkey = sigkey
-        self.cert = cert
+    def has_private(self):
+        """Returns True if this Destination contains private material, False otherwise."""
+        return self.enckey.has_private or self.sigkey.has_private()
+
+    def to_public(self):
+        """Return a copy of this Destination without any private key material."""
+        if self.has_private():
+            return Destination(self.enckey.to_public(),
+                               self.sigkey.to_public(),
+                               self.cert,
+                               self.padding)
+        else:
+            return self
 
     def sign(self, data):
         return self.sigkey.sign(data)
@@ -247,15 +385,22 @@ class Destination(object):
     def __len__(self):
         return len(self.serialize())
 
-    def serialize(self):
+    def serialize(self, priv=False):
+        if priv and not self.has_private():
+            raise ValueError('No private key material in this Destination')
         data = bytes()
         if self.cert.type == CertificateType.KEY:
             encpub = self.enckey.get_pubkey()
             sigpub = self.sigkey.get_pubkey()
-            data += encpub[:min(256, cert.enctype.pubkey_len)]
-            data += '\0' * (max(256, 384-cert.sigtype.pubkey_len) -
-                            min(256, cert.enctype.pubkey_len))
-            data += sigpub[max(256, 384-cert.sigtype.pubkey_len):384]
+            enc_end = min(256, self.cert.enctype.pubkey_len)
+            sig_start = max(256, 384-self.cert.sigtype.pubkey_len)
+            if len(self.padding) == 0:
+                # Generate random padding
+                pad_len = sig_start - enc_end
+                self.padding = random().getrandbits(pad_len*8).to_bytes(pad_len, 'big')
+            data += encpub[:enc_end]
+            data += self.padding
+            data += sigpub[:384-sig_start]
             data += self.cert.serialize()
         elif self.cert.type != CertificateType.MULTI:
             data += self.enckey.get_pubkey()
@@ -263,6 +408,9 @@ class Destination(object):
             data += self.cert.serialize()
         else:
             raise NotImplementedError('Multiple certs not yet supported')
+        if priv:
+            data += self.enckey.get_privkey()
+            data += self.sigkey.get_privkey()
         self._log.debug('serialize len=%d' % len(data))
         return data
 
@@ -311,10 +459,10 @@ class LeaseSet(object):
             self.dest.verify(raw[:-40], self.sig)
             # Signature matches, now parse the rest
             data = data[:len(self.dest)]
-            self.enckey = crypto.ElGamalKey(raw=data[:256])
+            self.enckey = crypto.ElGamalKey(data[:256])
             self._log.debug(self.enckey)
             data = data[256:]
-            self.sigkey = crypto.DSAKey(raw=data[:128])
+            self.sigkey = crypto.DSAKey(data[:128])
             self._log.debug(self.sigkey)
             data = data[128:]
             numls = data[0]
@@ -333,8 +481,8 @@ class LeaseSet(object):
     def __str__(self):
         return '[LeaseSet leases=%s enckey=%s sigkey=%s dest=%s]' % (
             self.leases,
-            [crypto.self.enckey.get_pubkey()],
-            [crypto.self.sigkey.get_pubkey()],
+            [self.enckey.get_pubkey()],
+            [self.sigkey.get_pubkey()],
             self.dest)
 
     def serialize(self):

@@ -148,7 +148,7 @@ class _SocketEndpoint(client.I2CPHandler):
         else:
             self._log.warn("got packet for unknown stream. pkt={} srcport={} dstport={}".format(pkt, srcport, dstport))
         raise Return()
-            
+
     def _has_stream(self, pkt):
         """
         return true if we have a stream for this packet
@@ -225,7 +225,7 @@ class _SocketEndpoint(client.I2CPHandler):
         os.close(fd)
         handler = self._handlers.pop(sid)
         handler.end()
-        
+
     def _register_socket_stream(self, sid, write_fd):
         """
         register a stream id to write to a file descriptor
@@ -281,7 +281,7 @@ class _SocketEndpoint(client.I2CPHandler):
             self._log.debug("okay closed i2cp")
             self._i2cp = None
 
-            
+
     def _close(self):
         self._log.debug("Closing interface")
         # if the event loop is already closed we're gud
@@ -365,13 +365,13 @@ class _SocketState:
 
         # end flag
         self._end = False
-        
+
     def end(self):
         """
-        
+
         """
         self._end = True
-        
+
     def _opt_int(self, shortname):
         """
         :param shortname: the name of the option, it will be prefixed with 'i2p.streaming'
@@ -699,5 +699,5 @@ def create_interface(keyfile=defaults.keyfile, i2cp_options=defaults.i2cp_option
     :param i2cp_port: i2cp interface port
     :return: a new socket endpoint used for creating i2p sockets
     """
-    raise NotImplemented()
+    raise NotImplementedError()
 
