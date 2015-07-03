@@ -135,6 +135,12 @@ class Certificate(object):
     def __str__(self):
         return '[cert type=%s data=%s]' % (self.type.name, self.data)
 
+    def upconvert(self):
+        if self.type == CertificateType.KEY:
+            return KeyCertificate(data=self.data)
+        else:
+            return self
+
     def serialize(self, b64=False):
         data = bytearray()
         data += struct.pack(b'>B', self.type.value)
@@ -154,7 +160,7 @@ class KeyCertificate(Certificate):
             data = self._data_from_keys(sigkey, enckey)
         super().__init__(CertificateType.KEY, data, raw, b64)
         if len(self.data) < 4:
-            raise ValueError("data too short")
+            raise ValueError("data too short: %s" % self.data)
 
     @staticmethod
     def _data_from_keys(sigkey, enckey):
@@ -307,7 +313,7 @@ class Destination(object):
             rest = raw[len(cert.serialize()):]
 
         if cert.type == CertificateType.KEY:
-            cert = KeyCertificate(cert)
+            cert = cert.upconvert()
             # XXX Assume no extra crypto key data
             encpub = data[:min(256, cert.enctype.pubkey_len)]
             sigpub = data[max(256, 384-cert.sigtype.pubkey_len):384] + \
@@ -376,10 +382,10 @@ class Destination(object):
         if self.cert.type == CertificateType.KEY:
             encpub = self.enckey.get_pubkey()
             sigpub = self.sigkey.get_pubkey()
-            data += encpub[:min(256, cert.enctype.pubkey_len)]
-            data += '\0' * (max(256, 384-cert.sigtype.pubkey_len) -
-                            min(256, cert.enctype.pubkey_len))
-            data += sigpub[max(256, 384-cert.sigtype.pubkey_len):384]
+            data += encpub[:min(256, self.cert.enctype.pubkey_len)]
+            data += b'\0' * (max(256, 384-self.cert.sigtype.pubkey_len) -
+                             min(256, self.cert.enctype.pubkey_len))
+            data += sigpub[max(256, 384-self.cert.sigtype.pubkey_len):384]
             data += self.cert.serialize()
         elif self.cert.type != CertificateType.MULTI:
             data += self.enckey.get_pubkey()
