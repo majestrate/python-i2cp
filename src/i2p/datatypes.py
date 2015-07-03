@@ -4,6 +4,7 @@ import logging
 import struct
 import time
 
+from Crypto.Random.random import StrongRandom as random
 from enum import Enum
 
 from . import crypto
@@ -207,7 +208,7 @@ class Destination(object):
 
     _log = logging.getLogger('Destination')
 
-    def __init__(self, enckey=None, sigkey=None, cert=None, raw=None, b64=False):
+    def __init__(self, enckey=None, sigkey=None, cert=None, padding=bytes(), raw=None, b64=False):
         """Construct a Destination.
 
         A Destination can be constructed in several ways:
@@ -239,7 +240,7 @@ class Destination(object):
             Destination(enckey, sigkey, cert)
         """
         if raw:
-            enckey, sigkey, cert = self._parse(raw, b64)
+            enckey, sigkey, cert, padding = self._parse(raw, b64)
 
         rebuild_cert = False
         if enckey is None or isinstance(enckey, crypto.EncType) or \
@@ -291,6 +292,7 @@ class Destination(object):
         self.enckey = enckey
         self.sigkey = sigkey
         self.cert = cert
+        self.padding = padding
 
     def _parse(self, raw, b64=False):
         if b64:
@@ -315,19 +317,24 @@ class Destination(object):
         if cert.type == CertificateType.KEY:
             cert = cert.upconvert()
             # XXX Assume no extra crypto key data
-            encpub = data[:min(256, cert.enctype.pubkey_len)]
-            sigpub = data[max(256, 384-cert.sigtype.pubkey_len):384] + \
+            enc_end = min(256, cert.enctype.pubkey_len)
+            sig_start = max(256, 384-cert.sigtype.pubkey_len)
+            encpub = data[:enc_end]
+            padding = data[enc_end:sig_start]
+            sigpub = data[sig_start:384] + \
                      cert.extra_sigkey_data
             if len(rest):
                 encpriv = rest[:cert.enctype.privkey_len]
                 sigpriv = rest[cert.enctype.privkey_len:cert.enctype.privkey_len+cert.sigtype.privkey_len]
                 return cert.enctype.cls(encpub, encpriv), \
                        cert.sigtype.cls(sigpub, sigpriv), \
-                       cert
+                       cert, \
+                       padding
             else:
                 return cert.enctype.cls(encpub), \
                        cert.sigtype.cls(sigpub), \
-                       cert
+                       cert, \
+                       padding
         elif cert.type != CertificateType.MULTI:
             # No KeyCert, so defaults to ElGamal/DSA
             encpub = data[:256]
@@ -337,11 +344,13 @@ class Destination(object):
                 sigpriv = rest[256:276]
                 return crypto.ElGamalKey(encpub, encpriv), \
                        crypto.DSAKey(sigpub, sigpriv), \
-                       cert
+                       cert, \
+                       bytes()
             else:
                 return crypto.ElGamalKey(encpub), \
                        crypto.DSAKey(sigpub), \
-                       cert
+                       cert, \
+                       bytes()
         else:
             raise NotImplementedError('Multiple certs not yet supported')
 
@@ -359,7 +368,8 @@ class Destination(object):
         if self.has_private():
             return Destination(self.enckey.to_public(),
                                self.sigkey.to_public(),
-                               self.cert)
+                               self.cert,
+                               self.padding)
         else:
             return self
 
@@ -382,10 +392,15 @@ class Destination(object):
         if self.cert.type == CertificateType.KEY:
             encpub = self.enckey.get_pubkey()
             sigpub = self.sigkey.get_pubkey()
-            data += encpub[:min(256, self.cert.enctype.pubkey_len)]
-            data += b'\0' * (max(256, 384-self.cert.sigtype.pubkey_len) -
-                             min(256, self.cert.enctype.pubkey_len))
-            data += sigpub[max(256, 384-self.cert.sigtype.pubkey_len):384]
+            enc_end = min(256, self.cert.enctype.pubkey_len)
+            sig_start = max(256, 384-self.cert.sigtype.pubkey_len)
+            if len(self.padding) == 0:
+                # Generate random padding
+                pad_len = sig_start - enc_end
+                self.padding = random().getrandbits(pad_len*8).to_bytes(pad_len, 'big')
+            data += encpub[:enc_end]
+            data += self.padding
+            data += sigpub[:384-sig_start]
             data += self.cert.serialize()
         elif self.cert.type != CertificateType.MULTI:
             data += self.enckey.get_pubkey()

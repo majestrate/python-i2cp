@@ -101,7 +101,7 @@ class TestDestination(TestCase):
         assert dest.cert.type == cert_type
         assert len(dest.cert.data) == data_len
 
-    def test_serialize(self):
+    def test_serialize_nullcert(self):
         dest = datatypes.Destination(crypto.ElGamalKey(), crypto.DSAKey())
         assert dest.cert.type == datatypes.CertificateType.NULL
         data = dest.serialize()
@@ -109,6 +109,17 @@ class TestDestination(TestCase):
         assert dest2.enckey.key.y == dest.enckey.key.y
         assert dest2.sigkey.key.y == dest.sigkey.key.y
         assert dest2.cert.type == dest.cert.type
+        assert dest2.padding == dest.padding
+
+    def test_serialize_keycert(self):
+        dest = datatypes.Destination(crypto.ElGamalKey(), crypto.ECDSA256Key())
+        assert dest.cert.type == datatypes.CertificateType.KEY
+        data = dest.serialize()
+        dest2 = datatypes.Destination(raw=data)
+        assert dest2.enckey.key.y == dest.enckey.key.y
+        assert dest2.sigkey.key.get_pubkey() == dest.sigkey.key.get_pubkey()
+        assert dest2.cert.type == dest.cert.type
+        assert dest2.padding == dest.padding
 
     def test_base64(self):
         self._test_base64(DEST_DSA_B64)
