@@ -87,13 +87,6 @@ class Key(object):
             raise TypeError('Private key not available in this object')
         return self._get_privkey()
 
-    def serialize(self):
-        """Get the serialized public and private key material.
-
-        This is not necessarily the same as get_pubkey() + get_privkey()
-        """
-        return self._serialize()
-
 
 class CryptoKey(Key):
     """Base class for encryption keys."""
@@ -185,21 +178,11 @@ class ElGamalKey(CryptoKey):
     def _get_privkey(self):
         return int(self.key.x).to_bytes(256, 'big')
 
-    def _serialize(self):
-        data = bytes()
-        data += int(self.key.y).to_bytes(256, 'big')
-        data += int(self.key.x).to_bytes(256, 'big')
-        return data
-
     def _encrypt(self, plaintext):
         raise NotImplementedError
 
     def _decrypt(self, ciphertext):
         raise NotImplementedError
-
-
-class DSAException(Exception):
-    pass
 
 
 class DSAKey(SigningKey):
@@ -246,13 +229,6 @@ class DSAKey(SigningKey):
 
     def _get_privkey(self):
         return int(self.key.x).to_bytes(20, 'big')
-
-    def _serialize(self):
-        data = bytes()
-        data += int(self.key.y).to_bytes(128, 'big')
-        # XXX Why is private key padded here?
-        data += int(self.key.x).to_bytes(128, 'big')
-        return data
 
     def _sign(self, data):
         """Generate DSA-SHA1 signature."""
