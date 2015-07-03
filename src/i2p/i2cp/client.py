@@ -162,7 +162,7 @@ class Connection(object):
     def generate_dest(self, keyfile):
         if not os.path.exists(keyfile):
             with open(keyfile, 'wb') as wf:
-                wr.write(datatypes.Destination().serialize())
+                wf.write(datatypes.Destination().serialize(priv=True))
         with open(keyfile, 'rb') as rf:
             self.dest = datatypes.Destination(raw=rf)
 
@@ -170,11 +170,12 @@ class Connection(object):
         """
         lookup name asynchronously
         """
-        self._log.info('async lookup {}'.format(name))
-        msg = messages.HostLookupMessage(name=name, sid=self._sid)
-        self._host_lookups[msg.rid] = ftr, name
-        self._log.debug('put rid {}'.format(msg.rid))
-        self._loop.call_soon_threadsafe(self._async, self._send_msg(msg))
+        if not self._has_lookup_job(name):
+            self._log.info('async lookup {}'.format(name))
+            msg = messages.HostLookupMessage(name=name, sid=self._sid)
+            self._host_lookups[msg.rid] = ftr, name
+            self._log.debug('put rid {}'.format(msg.rid))
+            self._loop.call_soon_threadsafe(self._async, self._send_msg(msg))
 
     def _has_lookup_job(self, name):
         """
@@ -364,7 +365,7 @@ class Connection(object):
                     ftr.set_result(msg.dest)
             else:
                 ftr.set_result(None)
-            self._host_lookups.pop(msg.rid)
+            del self._host_lookups[msg.rid]
 
     def _msg_handle_session_status(self, msg):
         """
@@ -435,11 +436,9 @@ class Connection(object):
             self._issue_lookup(name)
 
     def _issue_lookup(self, name):
-        # don't call lookup async many times if we are already pending
-        if not self._has_lookup_job(name):
-            # this will put the resolved destination in our dest_cache on success
-            ftr = asyncio.Future(loop=self._loop)
-            self._loop.call_soon(self.lookup_async, name, ftr)
+        # this will put the resolved destination in our dest_cache on success
+        ftr = asyncio.Future(loop=self._loop)
+        self._loop.call_soon(self.lookup_async, name, ftr)
 
 
     def _check_dest_cache(self, name):

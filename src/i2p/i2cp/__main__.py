@@ -15,7 +15,7 @@ class Handler(I2CPHandler):
 
     _log = logging.getLogger('handler')
 
-    def __init__(self, dest, data, delay=0.5):
+    def __init__(self, dest, data, delay=1.5):
         self.dest = dest
         self.data = data
         self._delay = delay * 1.0
