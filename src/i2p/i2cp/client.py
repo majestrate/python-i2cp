@@ -87,7 +87,7 @@ class Connection(object):
         # unused
         self._lookup = None
         self._done = False
-        # our destination
+        # Our destination. Contains our private keys.
         self.dest = None
         # state stuff
         self._connected = False
@@ -158,11 +158,13 @@ class Connection(object):
                 ftr.set_result(None)
         tsk.add_done_callback(_done_connecting)
         yield From(ftr)
-            
+
     def generate_dest(self, keyfile):
         if not os.path.exists(keyfile):
-            datatypes.Destination.generate_dsa(keyfile)
-        self.dest = datatypes.Destination.load(keyfile)
+            with open(keyfile, 'wb') as wf:
+                wr.write(datatypes.Destination().serialize())
+        with open(keyfile, 'rb') as rf:
+            self.dest = datatypes.Destination(raw=rf)
 
     def lookup_async(self, name, ftr):
         """
@@ -182,7 +184,7 @@ class Connection(object):
             if name == _name:
                 return True
         return False
-        
+
     def _async(self, coro):
         """
         do stuff thread safe async
@@ -230,7 +232,7 @@ class Connection(object):
             # call again
             self._async(self._recv_process())
         raise Return()
-            
+
     def _begin_session(self):
         """
         begin i2cp session after sending protocol byte
@@ -239,7 +241,7 @@ class Connection(object):
         # fire off get date message
         msg = messages.GetDateMessage()
         self._async(self._send_msg(msg))
-        # start recving messages 
+        # start recving messages
         self._async(self._recv_process())
 
 
@@ -264,7 +266,7 @@ class Connection(object):
         self._log.debug('send %d bytes' % len(data))
         self._log.debug('--> {}'.format( [data]))
         raise Return(self._writer.drain())
-        
+
     @asyncio.coroutine
     def _send_msg(self, msg):
         if msg:
@@ -439,7 +441,7 @@ class Connection(object):
             ftr = asyncio.Future(loop=self._loop)
             self._loop.call_soon(self.lookup_async, name, ftr)
 
-            
+
     def _check_dest_cache(self, name):
         """
         :param dest:
@@ -468,7 +470,7 @@ class Connection(object):
             self.handler.session_done()
         except Exception as e:
             self._log.error("failed to call self.handler.session_done(): {}".format(e))
-        
+
     def done(self):
         """
         :return: a future that ends when this connection is done

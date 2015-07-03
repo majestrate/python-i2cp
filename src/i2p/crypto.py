@@ -44,22 +44,26 @@ def sha256(x): return SHA256.new(x).digest()
 class Key(object):
     """Base class for keys."""
 
-    def __init__(self, key_type, key=None, raw=None):
+    def __init__(self, key_type, pub=None, priv=None, key=None):
         """Create a key of type key_type.
 
+        If pub or priv are set, creates a Key using the provided key material.
         If key is set, creates a Key using the provided key.
-        If raw is set, creates a Key using data parsed from raw.
-        If neither is set, generates a new Key.
+        If no kwargs are provided, generates a new Key.
         """
         self.key_type = key_type
-        if raw:
+        if pub or priv:
+            if pub is not None and len(pub) != key_type.pubkey_len:
+                raise ValueError('pub key material is wrong length')
+            if priv is not None and len(priv) != key_type.privkey_len:
+                raise ValueError('priv key material is wrong length')
             # load a key from raw bytes
-            key = self._parse(raw)
+            key = self._parse(pub, priv)
         elif key is None:
             # generate a new key
             key = self._generate()
         if isinstance(key, bytes):
-            raise TypeError('Pass in raw key material with the raw= kwarg')
+            raise TypeError('Pass in key material with the pub= and priv= kwargs')
         self.key = key
 
     def has_private(self):
@@ -138,26 +142,20 @@ class SigningKey(Key):
 
 class ElGamalKey(CryptoKey):
 
-    def __init__(self, key=None, raw=None):
+    def __init__(self, pub=None, priv=None, key=None):
         """Construct an ElGamal-2048 encryption key.
 
         With no arguments, generates a new ElGamalKey.
+        If pub or priv are set, creates an ElGamalKey using provided key material.
         If key is set, creates an ElGamalKey using the provided key.
-        If raw is set, creates an ElGamalKey using data parsed from raw.
         """
-        super().__init__(EncType.ELGAMAL_2048, key, raw)
+        super().__init__(EncType.ELGAMAL_2048, pub, priv, key)
 
     @staticmethod
-    def _parse(raw):
+    def _parse(pub, priv=None):
         """Parse key data"""
-        if hasattr(raw, 'read'):
-            y = raw.read(256)
-            x = raw.read(256)
-        else:
-            y = raw[:256]
-            x = raw[256:512] if len(raw) == 512 else None
-        y = int.from_bytes(y, 'big')
-        x = int.from_bytes(x, 'big') if x else None
+        y = int.from_bytes(pub, 'big')
+        x = int.from_bytes(priv, 'big') if priv else None
         return ElGamalKey._construct(y, x)
 
     @staticmethod
@@ -179,7 +177,7 @@ class ElGamalKey(CryptoKey):
         return self.key.has_private()
 
     def _to_public(self):
-        return ElGamalKey(ElGamalKey._construct(key.y, None))
+        return ElGamalKey(key=ElGamalKey._construct(key.y, None))
 
     def _get_pubkey(self):
         return int(self.key.y).to_bytes(256, 'big')
@@ -206,26 +204,20 @@ class DSAException(Exception):
 
 class DSAKey(SigningKey):
 
-    def __init__(self, key=None, raw=None):
+    def __init__(self, pub=None, priv=None, key=None):
         """Construct a DSA-SHA1 signing key.
 
         With no arguments, generates a new DSAKey.
+        If pub or priv are set, creates a DSAKey using provided key material.
         If key is set, creates a DSAKey using the provided key.
-        If raw is set, creates a DSAKey using data parsed from raw.
         """
-        super().__init__(SigType.DSA_SHA1, key, raw)
+        super().__init__(SigType.DSA_SHA1, pub, priv, key)
 
     @staticmethod
-    def _parse(raw):
+    def _parse(pub, priv=None):
         """Parse key data"""
-        if hasattr(raw, 'read'):
-            y = raw.read(128)
-            x = raw.read(128)
-        else:
-            y = raw[:128]
-            x = raw[128:256] if len(raw) == 256 else None
-        y = int.from_bytes(y, 'big')
-        x = int.from_bytes(x, 'big') if x else None
+        y = int.from_bytes(pub, 'big')
+        x = int.from_bytes(priv, 'big') if priv else None
         return DSAKey._construct(y, x)
 
     @staticmethod
@@ -247,7 +239,7 @@ class DSAKey(SigningKey):
         return self.key.has_private()
 
     def _to_public(self):
-        return DSAKey(DSAKey._construct(key.y, None))
+        return DSAKey(key=DSAKey._construct(key.y, None))
 
     def _get_pubkey(self):
         return int(self.key.y).to_bytes(128, 'big')

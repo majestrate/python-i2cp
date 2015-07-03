@@ -37,13 +37,66 @@ class TestKeyCertificate(TestCase):
 
 class TestDestination(TestCase):
 
-    def test_parse(self):
+    def test_generate_default(self):
+        dest = datatypes.Destination()
+        assert dest.enckey.key_type == crypto.EncType.ELGAMAL_2048
+        assert dest.sigkey.key_type == crypto.SigType.DSA_SHA1
+        assert dest.cert.type == datatypes.CertificateType.NULL
+        dest2 = datatypes.Destination()
+        assert dest2.enckey.key.y != dest.enckey.key.y
+        assert dest2.sigkey.key.y != dest.sigkey.key.y
+
+    def test_generate_specify_types(self):
+        dest = datatypes.Destination(crypto.EncType.ELGAMAL_2048, crypto.SigType.DSA_SHA1)
+        assert dest.enckey.key_type == crypto.EncType.ELGAMAL_2048
+        assert dest.sigkey.key_type == crypto.SigType.DSA_SHA1
+        assert dest.cert.type == datatypes.CertificateType.NULL
+
+        # TODO uncomment when these types are implemented
+        #dest = datatypes.Destination(crypto.SigType.ECDSA_SHA256_P256)
+        #self._assert_keycert(dest, crypto.EncType.ELGAMAL_2048,
+        #                           crypto.SigType.ECDSA_SHA256_P256)
+        #dest = datatypes.Destination(crypto.EncType.EC_P256)
+        #self._assert_keycert(dest, crypto.EncType.EC_P256,
+        #                           crypto.SigType.DSA_SHA1)
+        #dest = datatypes.Destination(crypto.EncType.EC_P256,
+        #                             crypto.SigType.ECDSA_SHA256_P256)
+        #self._assert_keycert(dest, crypto.EncType.EC_P256,
+        #                           crypto.SigType.ECDSA_SHA256_P256)
+
+    def test_generate_from_keycert(self):
+        keycert = datatypes.KeyCertificate(crypto.DSAKey(),
+                                           crypto.ElGamalKey())
+        dest = datatypes.Destination(cert=keycert)
+        assert dest.enckey.key_type == crypto.EncType.ELGAMAL_2048
+        assert dest.sigkey.key_type == crypto.SigType.DSA_SHA1
+        assert dest.cert.type == datatypes.CertificateType.NULL
+
+        #keycert = datatypes.KeyCertificate(crypto.ECKey(crypto.SigType.ECDSA_SHA256_P256),
+        #                                   crypto.ElGamalKey())
+        #dest = datatypes.Destination(cert=keycert)
+        #self._assert_keycert(dest, crypto.EncType.EC_P256,
+        #                           crypto.SigType.ECDSA_SHA256_P256)
+
+    def _assert_keycert(self, dest, enctype, sigtype):
+        assert dest.enckey.key_type == enctype
+        assert dest.sigkey.key_type == sigtype
+        assert dest.cert.type == datatypes.CertificateType.KEY
+        assert dest.cert.sigtype == sigtype
+        assert dest.cert.enctype == enctype
+
+    def TODO_test_parse_eeppriv(self):
+        with open(testkey, 'rb') as rf:
+            dest = datatypes.Destination(raw=rf)
+
+    def test_parse_b64(self):
         dest = datatypes.Destination(raw=STATS_I2P_DEST_DSA, b64=True)
         assert dest.cert.type == datatypes.CertificateType.NULL
         assert len(dest.cert.data) == 0
 
     def test_serialize(self):
-        dest = datatypes.Destination(crypto.ElGamalKey(), crypto.DSAKey(), datatypes.Certificate())
+        dest = datatypes.Destination(crypto.ElGamalKey(), crypto.DSAKey())
+        assert dest.cert.type == datatypes.CertificateType.NULL
         data = dest.serialize()
         dest2 = datatypes.Destination(raw=data)
         assert dest2.enckey.key.y == dest.enckey.key.y
