@@ -303,8 +303,10 @@ class ECDSAKey(SigningKey):
                                 curve=self.key_type.spec))
 
     def _get_pubkey(self):
-        pubkey = self.key.pubkey_x + self.key.pubkey_y
-        assert len(pubkey) == self.key_type.pubkey_len
+        pubkey = bytes()
+        part_len = int(self.key_type.pubkey_len/2)
+        pubkey += pad_keypart(self.key.pubkey_x, part_len)
+        pubkey += pad_keypart(self.key.pubkey_y, part_len)
         return pubkey
 
     def _get_privkey(self):
@@ -505,6 +507,16 @@ def gen_keypair(fd):
 def dump_keypair(enckey, sigkey, fd):
     fd.write(enckey.serialize())
     fd.write(sigkey.serialize())
+
+def pad_keypart(keypart, tolen):
+    if len(keypart) < tolen:
+        return b'\0' * (tolen - len(keypart))
+    elif len(keypart) > tolen:
+        if len(keypart) > tolen+1 or keypart[0] != 0:
+            raise ValueError('key too big to fit in %d: %s' % (tolen, keypart))
+        return keypart[1:]
+    else:
+        return keypart
 
 
 if __name__ == '__main__':
