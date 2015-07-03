@@ -20,6 +20,11 @@ def assert_KeyCert_DSA_ElGamal(cert):
 
 class TestKeyCertificate(TestCase):
 
+    def test_create_from_keys(self):
+        cert = datatypes.KeyCertificate(crypto.DSAKey(),
+                                        crypto.ElGamalKey())
+        assert_KeyCert_DSA_ElGamal(cert)
+
     def test_parse(self):
         cert = datatypes.KeyCertificate(raw=DSA_ELGAMAL_KEY_CERT, b64=True)
         assert_KeyCert_DSA_ElGamal(cert)

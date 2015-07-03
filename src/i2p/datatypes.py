@@ -144,9 +144,13 @@ class KeyCertificate(Certificate):
 
     @staticmethod
     def _data_from_keys(sigkey, enckey):
+        if not isinstance(sigkey, crypto.SigningKey):
+            raise TypeError('sigkey is not a SigningKey')
+        if not isinstance(enckey, crypto.CryptoKey):
+            raise TypeError('enckey is not a CryptoKey')
         data = bytes()
-        data += struct.pack(b'>H', sigkey.key_type)
-        data += struct.pack(b'>H', enckey.key_type)
+        data += struct.pack(b'>H', sigkey.key_type.code)
+        data += struct.pack(b'>H', enckey.key_type.code)
         # XXX Assume no extra crypto key data
         sigpub = sigkey.get_pubkey()
         extra = max(0, len(sigpub) - 128)
