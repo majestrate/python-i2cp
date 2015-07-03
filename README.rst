@@ -1,5 +1,5 @@
 ========
-i2p.i2cp
+pure python i2p api
 ========
 
 public domain
@@ -10,12 +10,16 @@ requires:
   
 * I2P 0.9.14 or higher
 
-python deps:
-
-see requirements.txt
+for python deps see requirements.txt
 
 see examples directory for example usage
 
 TODO:
 
 * see todo.txt (uses https://github.com/ginatrapani/todo.txt-cli/)
+
+=======
+Status
+=======
+
+work in progress
