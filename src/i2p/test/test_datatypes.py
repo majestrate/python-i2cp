@@ -52,10 +52,9 @@ class TestDestination(TestCase):
         assert dest.sigkey.key_type == crypto.SigType.DSA_SHA1
         assert dest.cert.type == datatypes.CertificateType.NULL
 
-        # TODO uncomment when these types are implemented
-        #dest = datatypes.Destination(crypto.SigType.ECDSA_SHA256_P256)
-        #self._assert_keycert(dest, crypto.EncType.ELGAMAL_2048,
-        #                           crypto.SigType.ECDSA_SHA256_P256)
+        dest = datatypes.Destination(sigkey=crypto.SigType.ECDSA_SHA256_P256)
+        self._assert_keycert(dest, crypto.EncType.ELGAMAL_2048,
+                                   crypto.SigType.ECDSA_SHA256_P256)
         #dest = datatypes.Destination(crypto.EncType.EC_P256)
         #self._assert_keycert(dest, crypto.EncType.EC_P256,
         #                           crypto.SigType.DSA_SHA1)
@@ -72,11 +71,11 @@ class TestDestination(TestCase):
         assert dest.sigkey.key_type == crypto.SigType.DSA_SHA1
         assert dest.cert.type == datatypes.CertificateType.NULL
 
-        #keycert = datatypes.KeyCertificate(crypto.ECKey(crypto.SigType.ECDSA_SHA256_P256),
-        #                                   crypto.ElGamalKey())
-        #dest = datatypes.Destination(cert=keycert)
-        #self._assert_keycert(dest, crypto.EncType.EC_P256,
-        #                           crypto.SigType.ECDSA_SHA256_P256)
+        keycert = datatypes.KeyCertificate(crypto.ECDSA256Key(),
+                                           crypto.ElGamalKey())
+        dest = datatypes.Destination(cert=keycert)
+        self._assert_keycert(dest, crypto.EncType.ELGAMAL_2048,
+                                   crypto.SigType.ECDSA_SHA256_P256)
 
     def _assert_keycert(self, dest, enctype, sigtype):
         assert dest.enckey.key_type == enctype
