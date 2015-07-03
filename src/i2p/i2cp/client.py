@@ -162,7 +162,7 @@ class Connection(object):
     def generate_dest(self, keyfile):
         if not os.path.exists(keyfile):
             with open(keyfile, 'wb') as wf:
-                wr.write(datatypes.Destination().serialize())
+                wf.write(datatypes.Destination().serialize(priv=True))
         with open(keyfile, 'rb') as rf:
             self.dest = datatypes.Destination(raw=rf)
 
