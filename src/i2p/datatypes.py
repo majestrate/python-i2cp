@@ -466,6 +466,7 @@ class LeaseSet(object):
             self._log.debug(self.sigkey)
             data = data[128:]
             numls = data[0]
+            data = data[1:]
             while numls > 0:
                 _l = data[:44]
                 l = Lease(_l[:32], _l[32:36], _l[36:44])
@@ -494,7 +495,7 @@ class LeaseSet(object):
         data += self.dest.serialize()
         data += self.enckey.get_pubkey()
         data += self.sigkey.get_pubkey()
-        data += int(len(self.leases)).to_bytes(1, 'big')
+        data += len(self.leases).to_bytes(1, 'big')
         for l in self.leases:
             data += l.serialize()
         sig = self.dest.sign(data)
