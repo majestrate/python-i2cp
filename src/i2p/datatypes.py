@@ -481,8 +481,8 @@ class LeaseSet(object):
     def __str__(self):
         return '[LeaseSet leases=%s enckey=%s sigkey=%s dest=%s]' % (
             self.leases,
-            [crypto.self.enckey.get_pubkey()],
-            [crypto.self.sigkey.get_pubkey()],
+            [self.enckey.get_pubkey()],
+            [self.sigkey.get_pubkey()],
             self.dest)
 
     def serialize(self):
