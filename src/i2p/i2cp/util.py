@@ -38,6 +38,8 @@ def i2p_b64encode(data):
     return base64.b64encode(data, b'-~')
 
 def i2p_b64decode(data):
+    if isinstance(data, str):
+        data = bytes(data, 'ascii')
     return base64.b64decode(data, b'-~')
 
 def i2p_b32encode(data):

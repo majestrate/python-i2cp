@@ -25,9 +25,10 @@ dsa_q = int('A5DFC28FEF4CA1E286744CD8EED9D29D684046B7', 16)
 dsa_g = int('0C1F4D27D40093B429E962D7223824E0BBC47E7C832A39236FC683AF84889581075FF9082ED32353D4374D7301CDA1D23C431F4698599DDA02451824FF369752593647CC3DDC197DE985E43D136CDCFC6BD5409CD2F450821142A5E6F8EB1C3AB5D0484B8129FCF17BCE4F7F33321C3CB3DBB14A905E7B2B3E93BE4708CBCC82', 16)
 DSA_SHA1_SPEC = (dsa_g, dsa_p, dsa_q)
 
-P256_SPEC = 'prime256v1'
-P384_SPEC = 'secp384r1'
-P521_SPEC = 'secp521r1'
+# Use numeric codes because pyelliptic has issues with strings on Py2
+P256_SPEC = 415 # prime256v1
+P384_SPEC = 715 # secp384r1
+P521_SPEC = 716 # secp521r1
 F4_2048_SPEC = None
 F4_3072_SPEC = None
 F4_4096_SPEC = None
@@ -499,8 +500,9 @@ def asn1_to_sig_bytes(asn, tolen):
     der.decode(asn)
     sig = bytes()
     part_len = int(tolen/2)
-    sig += der[0].to_bytes(part_len, 'big')
-    sig += der[1].to_bytes(part_len, 'big')
+    # Wrap with int() for Py2
+    sig += int(der[0]).to_bytes(part_len, 'big')
+    sig += int(der[1]).to_bytes(part_len, 'big')
     return sig
 
 

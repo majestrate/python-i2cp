@@ -397,7 +397,8 @@ class Destination(object):
             if len(self.padding) == 0:
                 # Generate random padding
                 pad_len = sig_start - enc_end
-                self.padding = random().getrandbits(pad_len*8).to_bytes(pad_len, 'big')
+                # Wrap with int() for Py2
+                self.padding = int(random().getrandbits(pad_len*8)).to_bytes(pad_len, 'big')
             data += encpub[:enc_end]
             data += self.padding
             data += sigpub[:384-sig_start]
@@ -495,7 +496,8 @@ class LeaseSet(object):
         data += self.dest.serialize()
         data += self.enckey.get_pubkey()
         data += self.sigkey.get_pubkey()
-        data += len(self.leases).to_bytes(1, 'big')
+        # Wrap with int() for Py2
+        data += int(len(self.leases)).to_bytes(1, 'big')
         for l in self.leases:
             data += l.serialize()
         sig = self.dest.sign(data)
