@@ -330,11 +330,7 @@ class Connection(object):
         dummy_sigkey = crypto.DSAKey()
         #enckey = self.dest.enckey
         sigkey = self.dest.sigkey
-        leases = list()
-        for l in msg.leases:
-            l.end_date = datatypes.Date((time.time() * 1000) + 600000)
-            leases.append(l)
-        ls = datatypes.LeaseSet(leases=leases, dest=self.dest, ls_enckey=self._enckey, ls_sigkey=sigkey)
+        ls = datatypes.LeaseSet(leases=msg.leases, dest=self.dest, ls_enckey=self._enckey, ls_sigkey=sigkey)
         self._log.debug('made LeaseSet: {}'.format(ls))
         msg = messages.CreateLSMessage(
             sid=self._sid,
