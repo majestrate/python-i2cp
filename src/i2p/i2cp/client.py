@@ -340,22 +340,6 @@ class Connection(object):
         self._log.debug('made message')
         self._async(self._send_msg(msg))
         self._tunnels_ready()
-
-    def _msg_handle_request_ls(self, msg):
-        """
-        handle lease set request message
-        """
-        l = msg.leases[0]
-        enckey = self._enckey
-        sigkey = self.dest.sigkey
-        ls = datatypes.LeaseSet(leases=[l],dest=self.dest, ls_enckey=enckey, ls_sigkey=sigkey)
-        msg = messages.CreateLSMessage(
-            sid=self._sid,
-            sigkey=sigkey,
-            enckey=enckey,
-            leaseset=ls)
-        self._async(self._send_msg(msg))
-        
         
     def _msg_handle_message_payload(self, msg):
         """
