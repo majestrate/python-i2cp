@@ -1,4 +1,5 @@
-from __future__ import absolute_import, division, print_function, unicode_literals
+from __future__ import absolute_import, division, print_function
+from __future__ import unicode_literals
 from builtins import *
 import logging
 import struct
@@ -156,7 +157,8 @@ class KeyCertificate(Certificate):
 
     _log = logging.getLogger('KeyCertificate')
 
-    def __init__(self, sigkey=None, enckey=None, data=bytes(), raw=None, b64=False):
+    def __init__(self, sigkey=None, enckey=None, data=bytes(), raw=None,
+                 b64=False):
         if sigkey is not None and enckey is not None:
             data = self._data_from_keys(sigkey, enckey)
         super().__init__(CertificateType.KEY, data, raw, b64)
@@ -180,11 +182,13 @@ class KeyCertificate(Certificate):
 
     @property
     def sigtype(self):
-        return crypto.SigType.get_by_code(struct.unpack(b'>H', self.data[:2])[0])
+        return crypto.SigType.get_by_code(struct.unpack(b'>H',
+                                                        self.data[:2])[0])
 
     @property
     def enctype(self):
-        return crypto.EncType.get_by_code(struct.unpack(b'>H', self.data[2:4])[0])
+        return crypto.EncType.get_by_code(struct.unpack(b'>H',
+                                                        self.data[2:4])[0])
 
     @property
     def extra_sigkey_data(self):
@@ -208,7 +212,8 @@ class Destination(object):
 
     _log = logging.getLogger('Destination')
 
-    def __init__(self, enckey=None, sigkey=None, cert=None, padding=bytes(), raw=None, b64=False):
+    def __init__(self, enckey=None, sigkey=None, cert=None, padding=bytes(),
+                 raw=None, b64=False):
         """Construct a Destination.
 
         A Destination can be constructed in several ways:
@@ -325,7 +330,9 @@ class Destination(object):
                      cert.extra_sigkey_data
             if len(rest):
                 encpriv = rest[:cert.enctype.privkey_len]
-                sigpriv = rest[cert.enctype.privkey_len:cert.enctype.privkey_len+cert.sigtype.privkey_len]
+                sigpriv = rest[cert.enctype.privkey_len:\
+                               cert.enctype.privkey_len+\
+                               cert.sigtype.privkey_len]
                 return cert.enctype.cls(encpub, encpriv), \
                        cert.sigtype.cls(sigpub, sigpriv), \
                        cert, \
@@ -360,11 +367,16 @@ class Destination(object):
             self.cert)
 
     def has_private(self):
-        """Returns True if this Destination contains private material, False otherwise."""
+        """
+        Returns True if this Destination contains private material, 
+        False otherwise.
+        """
         return self.enckey.has_private or self.sigkey.has_private()
 
     def to_public(self):
-        """Return a copy of this Destination without any private key material."""
+        """
+        Return a copy of this Destination without any private key material.
+        """
         if self.has_private():
             return Destination(self.enckey.to_public(),
                                self.sigkey.to_public(),
@@ -398,7 +410,8 @@ class Destination(object):
                 # Generate random padding
                 pad_len = sig_start - enc_end
                 # Wrap with int() for Py2
-                self.padding = int(random().getrandbits(pad_len*8)).to_bytes(pad_len, 'big')
+                self.padding = int(random().getrandbits(pad_len*8)).to_bytes(
+                    pad_len, 'big')
             data += encpub[:enc_end]
             data += self.padding
             data += sigpub[:384-sig_start]
@@ -449,7 +462,8 @@ class Lease(object):
 class LeaseSet(object):
     _log = logging.getLogger('LeaseSet')
 
-    def __init__(self, raw=None, dest=None, ls_enckey=None, ls_sigkey=None, leases=None):
+    def __init__(self, raw=None, dest=None, ls_enckey=None, ls_sigkey=None,
+                 leases=None):
         if raw:
             data = raw
             self.leases = []
@@ -556,7 +570,8 @@ class dsa_datagram(datagram):
             self._log.debug('payloadlen=%d' % len(raw))
             self.payload = raw
             phash = crypto.sha256(self.payload)
-            self._log.debug('verify dgram: sig=%s hash=%s' % ([self.sig], [phash]))
+            self._log.debug('verify dgram: sig=%s hash=%s' % (
+                [self.sig], [phash]))
             self.dest.verify(phash, self.sig)
         else:
             self.dest = dest
@@ -582,7 +597,8 @@ class i2cp_payload(object):
 
     _log = logging.getLogger('i2cp_payload')
 
-    def __init__(self, raw=None, data=None, srcport=0, dstport=0, proto=I2CPProtocol.RAW):
+    def __init__(self, raw=None, data=None, srcport=0, dstport=0,
+                 proto=I2CPProtocol.RAW):
         if raw:
             self.dlen = struct.unpack(b'>I', raw[:4])[0]
             self._log.debug('payload len=%d' % self.dlen)
@@ -607,7 +623,8 @@ class i2cp_payload(object):
                 self.flags = 0
                 self.xflags = 2
             else:
-                raise ValueError('invalid ports: srcport=%s dstport=%s' % ([srcport], [dstport]))
+                raise ValueError('invalid ports: srcport=%s dstport=%s' % (
+                    [srcport], [dstport]))
 
     def serialize(self):
         data = bytearray()
@@ -623,7 +640,8 @@ class i2cp_payload(object):
         return struct.pack(b'>I', dlen) + data
 
     def __str__(self):
-        return '[Payload flags=%s srcport=%s dstport=%s xflags=%s proto=%s data=%s]' % (
+        return ('[Payload flags=%s srcport=%s dstport=%s xflags=%s' +
+               ' proto=%s data=%s]') % (
             self.flags,
             self.srcport,
             self.dstport,
