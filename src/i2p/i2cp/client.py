@@ -55,7 +55,102 @@ class I2CPHandler(object):
         """
         called when the session is done and the i2cp connection has gracefully disconnected
         """
+        
+class HandlerMux(I2CPHandler):
+    """
+    an i2cp handler that muxes several sub handlers
+    """
 
+    def __init__(self, loop=None):
+        """
+        :param loop: the event loop we want to use
+        """
+        self._loop = loop or asyncio.get_event_loop()
+        # all handlers
+        # (handler, port, proto) tuple
+        self._handlers = list()
+        
+    def got_dgram(self, dest, data, srcport, dstport):
+        """
+        we got a datagram of some sort
+        """
+        if dest is None:
+            self._gotRawDgram(data, srcport, dstport)
+        else:
+            self._gotDgram(dest, data, srcport, dstport)
+
+    def _gotRawDgram(self, data, srcport, dstport):
+        """
+        we got a non repliable datagram
+        """
+        for h, port, proto in self._handlers:
+            if ( port == -1 or port == dstport ) and ( proto == -1 or proto == datatypes.I2CPProtocol.RAW ):
+                self._loop.call_soon(h.got_dgram, None, data, srcport, dstport)
+            
+    def _gotDgram(self, dest, data, srcport, dstport):
+        """
+        we got a repliable datagram
+        """
+        for h, port, proto in self._handlers:
+            if ( port == -1 or port == dstport ) and ( proto == -1 or proto == datatypes.I2CPProtocol.DGRAM ):
+                self._loop.call_soon(h.got_dgram, dest, data, srcport, dstport)
+
+    def got_packet(self, pkt, srcport, dstport):
+        """
+        we got a streaming packet
+        """
+        for h, port, proto in self._handlers:
+            if ( port == -1 or port == dstport ) and ( proto == -1 or proto == datatypes.I2CPProtocol.STREAMING ):
+                self._loop.call_soon(h.got_packet, pkt, srcport, dstport)
+    
+            
+    def addHandler(self, handler, port=-1, proto=-1):
+        """
+        add a handler, subscribe to messages
+        :param handler: an I2CPHandler
+        :param port: if specified, the port to subscribe to
+        :param proto: if specified, accept messages with this protocol only
+        """
+        self._handlers.append((handler, port, proto))
+        
+    def session_refused(self):
+        """
+        called when the i2p router refuses a session
+        """
+        for h, _, _ in self._handlers:
+            self._loop.call_soon(h.session_refused)
+
+        
+    def disconnected(self, reason):
+        """
+        called if the i2cp session is disconnected abruptly
+        """
+        for h, _, _ in self._handlers:
+            self._loop.call_soon(h.disconnected, reason)
+
+    def session_done(self):
+        """
+        called when the session is done and the i2cp connection has gracefully disconnected
+        """
+        for h, _, _ in self._handlers:
+            self._loop.call_soon(h.session_done)
+        
+    def session_ready(self, conn):
+        """
+        our session is ready, we can now send messages
+        """
+        for h, _, _ in self._handlers:
+            self._loop.call_soon(h.session_ready, conn)
+
+
+    def session_made(self, conn):
+        """
+        our session was created, we can now do name lookups
+        """
+        for h, _, _ in self._handlers:
+            self._loop.call_soon(h.session_made, conn)
+        
+        
 class PrintDestinationHandler(I2CPHandler):
     """
     a handler that prints our destination and then closes the connection
