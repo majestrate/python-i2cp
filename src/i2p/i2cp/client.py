@@ -214,7 +214,6 @@ class Connection(object):
         # session handlers
         self._msg_handlers = {
             messages.MessageType.SessionStatus : self._msg_handle_session_status,
-            messages.MessageType.RequestLS : self._msg_handle_request_ls,
             messages.MessageType.SetDate : self._msg_handle_set_date,
             messages.MessageType.Disconnect : self._msg_handle_disconnect,
             messages.MessageType.RequestVarLS : self._msg_handle_request_var_ls,
