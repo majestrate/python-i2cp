@@ -139,7 +139,7 @@ def main():
 
     opts = {'inbound.length':'%d' % args.hops, 'outbound.length' :'%d' % args.hops}
     conn = i2cp.Connection(handler, i2cp_host=i2cp_host, i2cp_port=i2cp_port, keyfile=args.keyfile, evloop=loop, session_options=opts)
-    conn.open()
+    loop.run_until_complete(conn.open())
     loop.call_soon(_wait_for_done, conn, 1.0)
     loop.run_until_complete(ftr)
     
