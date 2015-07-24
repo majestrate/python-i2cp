@@ -35,21 +35,21 @@ class Handler(i2cp.I2CPHandler):
         else:
             self.loop = asyncio.get_event_loop()
 
-    @asyncio.coroutine
     def session_made(self, conn):
         """
         we made a session with the i2p router
         set tun interface up, watch io on it
         """
         self._conn = conn
-        print("ppp tun interace going up...")
+        print("tun interace going up...")
         self._tundev.up()
         self._log.info("tun interface up")
+
+    def session_ready(self, conn):
         self.loop.add_reader(self._tundev, self._read_tun, self._tundev)
         print ("interface ready")
         print ("we are {} talking to {}".format(self._conn.dest.base32(), self._dest))
 
-    @asyncio.coroutine
     def got_dgram(self, dest, data, srcport, dstport):
         #TODO: resolve self._dest to b32
         if dest.base32() == self._dest:
