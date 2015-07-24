@@ -82,7 +82,7 @@ def main():
     import argparse
 
     ap = argparse.ArgumentParser()
-    ap.add_argument("--hops", type=str, default=2, help="inbound/outbound tunnel length")
+    ap.add_argument("--hops", type=int, default=2, help="inbound/outbound tunnel length")
     ap.add_argument("--remote", type=str, default=None, help="remote destination to exchange ip packets with")
     ap.add_argument("--i2cp", type=str, default="127.0.0.1:7654", help="i2cp interface")
     ap.add_argument("--mtu", type=int, default=4096, help="interface mtu")
