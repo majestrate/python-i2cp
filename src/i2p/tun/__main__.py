@@ -75,7 +75,7 @@ class Handler(i2cp.I2CPHandler):
         we got a packet
         """
         self._write_buff.append(data)
-        self._log.info("recv q: {}".format(len(data)))
+        self._log.info("recv q: {}".format(len(self._write_buff)))
         
     def _write_tun(self, dev):
         while len(self._write_buff) > 0:
