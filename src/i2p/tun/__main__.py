@@ -21,7 +21,7 @@ class Handler(i2cp.I2CPHandler):
 
     _log = logging.getLogger("i2p.tun.Handler")
     
-    def __init__(self, remote_dest, tun, packet_factory):
+    def __init__(self, remote_dest, tun, packet_factory, loop=None):
         """
         :param tun: a i2p.tun.tundev.Interface instance, must already be configured and down
         """
@@ -31,7 +31,7 @@ class Handler(i2cp.I2CPHandler):
         self._mtu = tun.mtu + 60
         self._packet_factory = packet_factory
         self._write_buff = list()
-        self.loop = asyncio.new_event_loop()
+        self.loop = loop or asyncio.get_event_loop()
 
     def session_made(self, conn):
         """
@@ -47,8 +47,7 @@ class Handler(i2cp.I2CPHandler):
         self.loop.add_reader(self._tundev, self._read_tun, self._tundev)
         print ("interface ready")
         print ("we are {} talking to {}".format(self._conn.dest.base32(), self._dest))
-        self._thread = threading.Thread(target=self._run_loop)
-        self._thread.start()
+
         
     def _run_loop(self):
         try:
@@ -69,11 +68,6 @@ class Handler(i2cp.I2CPHandler):
         else:
             self._log.warn("got unwarrented packets from {}".format(dest))
 
-    def stop(self):
-        self.loop.stop()
-        self._thread.join()
-        self.loop.close()
-        
     def _read_tun(self, dev):
         """
         read from tun interface
@@ -136,7 +130,7 @@ def main():
         tun.mtu = args.mtu
         tun.netmask = args.netmask
         # make handler
-        handler = Handler(args.remote, tun, lambda x : x)
+        handler = Handler(args.remote, tun, lambda x : x, loop)
 
     opts = {'inbound.length':'%d' % args.hops, 'outbound.length' :'%d' % args.hops}
     opts['outbound.quantity'] = '8'
