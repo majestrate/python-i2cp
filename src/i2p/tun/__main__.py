@@ -39,7 +39,7 @@ class Handler(i2cp.I2CPHandler):
         self.loop = loop or asyncio.get_event_loop()
         self._bw = 0
         self._pps = 0
-        #self._scr = curses.initscr()
+        self._scr = curses.initscr()
 
     def update_ui(self):
         self._scr.clear()
@@ -68,7 +68,7 @@ class Handler(i2cp.I2CPHandler):
     def session_ready(self, conn):
         self.loop.add_reader(self._tundev, self._read_tun, self._tundev)
         self.loop.call_soon(self._pump_tun, self._tundev)
-        #self.update_ui()
+        self.update_ui()
         
     def _run_loop(self):
         try:
