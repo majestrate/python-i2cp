@@ -30,7 +30,7 @@ class Handler(i2cp.I2CPHandler):
         # include ip header
         self._mtu = tun.mtu + 60
         self._packet_factory = packet_factory
-        self._write_buff = list()
+        self._write_buff = collections.deque()
         self.loop = loop or asyncio.get_event_loop()
 
     def session_made(self, conn):
@@ -45,6 +45,7 @@ class Handler(i2cp.I2CPHandler):
 
     def session_ready(self, conn):
         self.loop.add_reader(self._tundev, self._read_tun, self._tundev)
+        self.loop.add_writer(self._tundev, self._write_packet, self._tundev)
         print ("interface ready")
         print ("we are {} talking to {}".format(self._conn.dest.base32(), self._dest))
 
@@ -62,12 +63,22 @@ class Handler(i2cp.I2CPHandler):
             if dlen > self._mtu:
                 self._log.warn("drop packet too big: {} > {} (mtu)".format(dlen, self._mtu))
             else:
-                self._log.info("write {} to tun".format(dlen))
-                self.loop.call_soon(self._tundev.write, data)
+                self.loop.call_soon(self._recv_packet, data)
 
         else:
             self._log.warn("got unwarrented packets from {}".format(dest))
 
+    def _recv_packet(self, data):
+        """
+        we got a packet
+        """
+        self._write_buff.append(data)
+
+    def _write_tun(self, dev):
+        while len(self._write_buff) > 0:
+            d = self._write_buff.pop()
+            dev.write(d)
+            
     def _read_tun(self, dev):
         """
         read from tun interface
