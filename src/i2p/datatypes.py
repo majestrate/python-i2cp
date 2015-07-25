@@ -213,7 +213,7 @@ class Destination(object):
     _log = logging.getLogger('Destination')
 
     def __init__(self, enckey=None, sigkey=None, cert=None, padding=bytes(),
-                 raw=None, b64=False):
+                 raw=None, b64=False, private=False):
         """Construct a Destination.
 
         A Destination can be constructed in several ways:
@@ -233,7 +233,7 @@ class Destination(object):
 
         5. Read a Destination in from an eepPriv.dat file
             with open(keyfile, 'rb') as rf:
-                Destination(raw=rf)
+                Destination(raw=rf, private=True)
 
         6. Parse a B64 Destination
             Destination(raw=b64string, b64=True)
@@ -245,7 +245,7 @@ class Destination(object):
             Destination(enckey, sigkey, cert)
         """
         if raw:
-            enckey, sigkey, cert, padding = self._parse(raw, b64)
+            enckey, sigkey, cert, padding = self._parse(raw, b64, private)
 
         rebuild_cert = False
         if enckey is None or isinstance(enckey, crypto.EncType) or \
@@ -299,7 +299,7 @@ class Destination(object):
         self.cert = cert
         self.padding = padding
 
-    def _parse(self, raw, b64=False):
+    def _parse(self, raw, b64=False, private=False):
         if b64:
             if hasattr(raw, 'read'):
                 raise TypeError('b64 flag is incompatible with stream data')
@@ -346,7 +346,7 @@ class Destination(object):
             # No KeyCert, so defaults to ElGamal/DSA
             encpub = data[:256]
             sigpub = data[256:384]
-            if len(rest):
+            if len(rest) and private
                 encpriv = rest[:256]
                 sigpriv = rest[256:276]
                 return crypto.ElGamalKey(encpub, encpriv), \
