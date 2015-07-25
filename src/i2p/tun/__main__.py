@@ -47,7 +47,7 @@ class Handler(i2cp.I2CPHandler):
 
     def session_ready(self, conn):
         self.loop.add_reader(self._tundev, self._read_tun, self._tundev)
-        self.loop.add_writer(self._tundev, self._write_packet, self._tundev)
+        self.loop.add_writer(self._tundev, self._write_tun, self._tundev)
         print ("interface ready")
         print ("we are {} talking to {}".format(self._conn.dest.base32(), self._dest))
 
