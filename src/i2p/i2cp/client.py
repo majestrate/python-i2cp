@@ -529,7 +529,7 @@ class Connection(object):
             p = datatypes.i2cp_payload(proto=datatypes.I2CPProtocol.STREAMING, srcport=srcport, dstport=dstport, data=pkt_data).serialize()
             msg = messages.SendMessageMessage(sid=self._sid, dest=dest, payload=p)
             # send the packet safely
-            self._loop.call_soon_threadsafe(self._async, self._send_msg(msg))
+            self._loop.call_soon_threadsafe(self._queue_send, msg)
         else:
             # look up the destination
             self._issue_lookup()
