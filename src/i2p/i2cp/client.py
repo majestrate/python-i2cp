@@ -322,24 +322,29 @@ class Connection(object):
         raise Return(msgtype, hdrdata, msgraw)
 
 
-    @asyncio.coroutine
     def _recv_process(self):
         """
         process recv'd message
         """
         if self.is_connected():
-            msgtype, hdrdata, msgraw = yield From(self._recv_message())
-            # handle message data
-            if msgtype in self._msg_handlers:
-                handler = self._msg_handlers[msgtype]
-                msg = messages.messages[msgtype](raw=msgraw)
-                # call handler
-                self._loop.call_soon_threadsafe(handler, msg)
-            else:
-                self._log.warn('unhandled message of type: {}'.format(msgtype))
-            # call again
-            self._async(self._recv_process())
-        raise Return()
+            tsk = self._async(self._recv_message())
+            tsk.add_done_callback(self._got_msg)
+
+    def _got_msg(self, ftr):
+        """
+        we got a message
+        """
+        msgtype, hdrdata, msgraw = ftr.result()
+        # handle message data
+        if msgtype in self._msg_handlers:
+            handler = self._msg_handlers[msgtype]
+            msg = messages.messages[msgtype](raw=msgraw)
+            # call handler
+            self._loop.call_soon_threadsafe(handler, msg)
+        else:
+            self._log.warn('unhandled message of type: {}'.format(msgtype))
+        # next message
+        self._loop.call_soon(self._recv_process)
 
     def _begin_session(self):
         """
@@ -350,7 +355,7 @@ class Connection(object):
         msg = messages.GetDateMessage(version=self._i2cp_version)
         self._async(self._send_msg(msg))
         # start recving messages
-        self._async(self._recv_process())
+        self._recv_process()
 
 
     @asyncio.coroutine
