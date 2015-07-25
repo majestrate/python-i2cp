@@ -575,7 +575,7 @@ class Connection(object):
         """
         queue a message to be sent
         """
-        self._sendq += msg
+        self._sendq.append(msg)
             
     def _issue_lookup(self, name):
         # don't call lookup async many times if we are already pending
