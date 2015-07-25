@@ -34,7 +34,7 @@ class Handler(i2cp.I2CPHandler):
         self._packet_factory = packet_factory
         self._write_buff = collections.deque() 
         self._read_buff = collections.deque()
-       self.loop = loop or asyncio.get_event_loop()
+        self.loop = loop or asyncio.get_event_loop()
 
     def session_made(self, conn):
         """
