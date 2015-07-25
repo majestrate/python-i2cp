@@ -124,7 +124,6 @@ class Handler(i2cp.I2CPHandler):
         while len(self._write_buff) > 0:
             d = self._write_buff.pop()
             self._pps += 1
-            print(len(d))
             while len(d) > 0:
                 pktlen = struct.unpack('>H', d[:2])[0]
                 d = d[2:]
