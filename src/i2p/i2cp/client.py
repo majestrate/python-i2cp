@@ -285,7 +285,7 @@ class Connection(object):
             msg = messages.HostLookupMessage(name=name, sid=self._sid)
             self._host_lookups[msg.rid] = ftr, name, hook
             self._log.debug('put rid {}'.format(msg.rid))
-            self._loop.call_soon_threadsafe(self._async, self._send_msg(msg))
+            self._loop.call_soon_threadsafe(self._queue_send, msg)
 
     def _has_lookup_job(self, name):
         """
@@ -415,8 +415,8 @@ class Connection(object):
         if not self._created:
             self._log.info('creating session...')
             msg = messages.CreateSessionMessage(opts=self.opts, dest=self.dest, session_date=datatypes.Date())
-            self._async(self._send_msg(msg))
-
+            self._loop.call_soon(self._queue_send, msg)
+            
     def _msg_handle_disconnect(self, msg):
         """
         handle disconnect message
@@ -457,7 +457,7 @@ class Connection(object):
             enckey=self._enckey,
             leaseset=ls)
         self._log.debug('made message')
-        self._async(self._send_msg(msg))
+        self._loop.call_soon(self._queue_send, msg)
         self._tunnels_ready()
         
     def _msg_handle_message_payload(self, msg):
