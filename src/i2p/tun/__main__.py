@@ -16,6 +16,7 @@ from trollius import Return, From
 
 import collections
 import logging
+import struct
 import threading
 
 import curses
@@ -30,8 +31,8 @@ class Handler(i2cp.I2CPHandler):
         """
         self._dest = remote_dest
         self._tundev = tun
-        # include ip header
-        self._mtu = tun.mtu + 60
+        # include ip header and stuff
+        self._mtu = tun.mtu + 80
         self._packet_factory = packet_factory
         self._write_buff = collections.deque() 
         self._read_buff = collections.deque()
@@ -104,17 +105,23 @@ class Handler(i2cp.I2CPHandler):
         return len(self._read_buff), len(self._write_buff)
         
     def _pump_tun(self, dev):
-        while len(self._write_buff) > 0:
-            d = self._write_buff.pop()
-            dev.write(d)
-            self._bw += len(d)
-            self._pps += 1
-        while len(self._read_buff) > 0:
+        pkt = bytearray()
+        while len(self._read_buff) > 0 and len(pkt) < self._mtu:
             d = self._read_buff.pop()
-            self._send_packet(d)
-            self._bw += len(d)
+            pkt += struct.pack('>H', len(d))
+            pkt += d
+        self._send_packet(pkt)
+
+        while len(self._write_buff) > 0:
             self._pps += 1
-        self.loop.call_later(0.0005, self._pump_tun, dev)
+            d = self._write_buff.pop()
+            while len(d) > 0:
+                pktlen = struct.unpack('>H', d[:2])
+                d = d[2:]
+                self._bw += pktlen
+                dev.write(d[:pktlen])
+            
+        self.loop.call_later(0.1, self._pump_tun, dev)
             
     def _read_tun(self, dev):
         """
@@ -134,6 +141,8 @@ class Handler(i2cp.I2CPHandler):
         """
         send a packet of data
         """
+        self._pps += 1
+        self._bw += len(data)
         self._log.debug("write {} to {}".format(len(data), self._dest))        
         # send to endpoint
         self._conn.send_dsa_dgram(self._dest, data)
