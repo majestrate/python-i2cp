@@ -15,12 +15,13 @@ import trollius as asyncio
 from trollius import Return, From
 
 import logging
+import threading
 
 class Handler(i2cp.I2CPHandler):
 
     _log = logging.getLogger("i2p.tun.Handler")
     
-    def __init__(self, remote_dest, tun, packet_factory, loop=None):
+    def __init__(self, remote_dest, tun, packet_factory):
         """
         :param tun: a i2p.tun.tundev.Interface instance, must already be configured and down
         """
@@ -30,10 +31,7 @@ class Handler(i2cp.I2CPHandler):
         self._mtu = tun.mtu + 60
         self._packet_factory = packet_factory
         self._write_buff = list()
-        if loop:
-            self.loop = loop
-        else:
-            self.loop = asyncio.get_event_loop()
+        self.loop = asyncio.new_event_loop()
 
     def session_made(self, conn):
         """
@@ -49,7 +47,8 @@ class Handler(i2cp.I2CPHandler):
         self.loop.add_reader(self._tundev, self._read_tun, self._tundev)
         print ("interface ready")
         print ("we are {} talking to {}".format(self._conn.dest.base32(), self._dest))
-
+        threading.Thread(target=self.loop.run_forever, args=tuple()).start()
+        
     def got_dgram(self, dest, data, srcport, dstport):
         #TODO: resolve self._dest to b32
         if dest.base32() == self._dest:
@@ -109,16 +108,6 @@ def main():
     loop = asyncio.new_event_loop()
     ftr = asyncio.Future(loop=loop)
     tun = None
-    # wait sleeptime seconds for our connection to be done or retry
-    def _wait_for_done(conn, sleeptime):
-        if conn.is_done():
-            ftr.set_result(True)
-            if tun:
-                tun.down()
-                tun.close()
-        else:
-            loop.call_later(sleeptime, _wait_for_done, conn, sleeptime)
-            
     
     if args.remote is None:
         handler = i2cp.PrintDestinationHandler()
@@ -135,13 +124,12 @@ def main():
         tun.mtu = args.mtu
         tun.netmask = args.netmask
         # make handler
-        handler = Handler(args.remote, tun, lambda x : x, loop)
+        handler = Handler(args.remote, tun, lambda x : x)
 
     opts = {'inbound.length':'%d' % args.hops, 'outbound.length' :'%d' % args.hops}
     conn = i2cp.Connection(handler, i2cp_host=i2cp_host, i2cp_port=i2cp_port, keyfile=args.keyfile, loop=loop, session_options=opts)
     loop.run_until_complete(conn.open())
-    loop.call_soon(_wait_for_done, conn, 1.0)
-    loop.run_until_complete(ftr)
+    loop.run_forever()
     
 
 if __name__ == "__main__":
