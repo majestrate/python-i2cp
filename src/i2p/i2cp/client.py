@@ -356,7 +356,7 @@ class Connection(object):
         self._log.debug('begin_session()')
         # fire off get date message
         msg = messages.GetDateMessage(version=self._i2cp_version)
-        self._queue_msg(msg)
+        self._queue_send(msg)
         self._loop.call_soon(self._pump_send)
         # start recving messages
         self._recv_process()
