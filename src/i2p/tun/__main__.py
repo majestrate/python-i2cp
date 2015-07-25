@@ -177,7 +177,7 @@ def main():
     if args.debug:
         lvl = logging.DEBUG
     else:
-        lvl = logging.WARN
+        lvl = logging.INFO
 
     i2cp_host = args.i2cp.split(":")[0]
     i2cp_port = int(args.i2cp.split(":")[-1])
