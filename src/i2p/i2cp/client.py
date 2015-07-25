@@ -373,7 +373,7 @@ class Connection(object):
         self._writer.write(data)
         self._log.debug('send %d bytes' % len(data))
         self._log.debug('--> {}'.format( [data]))
-        raise Return(self._writer.drain())
+        self._async(self._writer.drain())
 
     @asyncio.coroutine
     def _send_msg(self, msg):
