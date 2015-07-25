@@ -32,8 +32,9 @@ class Handler(i2cp.I2CPHandler):
         # include ip header
         self._mtu = tun.mtu + 60
         self._packet_factory = packet_factory
-        self._write_buff = collections.deque()
-        self.loop = loop or asyncio.get_event_loop()
+        self._write_buff = collections.deque() 
+        self._read_buff = collections.deque()
+       self.loop = loop or asyncio.get_event_loop()
 
     def session_made(self, conn):
         """
@@ -47,7 +48,7 @@ class Handler(i2cp.I2CPHandler):
 
     def session_ready(self, conn):
         self.loop.add_reader(self._tundev, self._read_tun, self._tundev)
-        self.loop.call_soon(self._write_tun, self._tundev)
+        self.loop.call_soon(self._pump_tun, self._tundev)
         print ("interface ready")
         print ("we are {} talking to {}".format(self._conn.dest.base32(), self._dest))
 
@@ -77,16 +78,19 @@ class Handler(i2cp.I2CPHandler):
         self._write_buff.append(data)
         self._log.info("recv q: {}".format('#' * len(self._write_buff)))
         
-    def _write_tun(self, dev):
+    def _pump_tun(self, dev):
         while len(self._write_buff) > 0:
             d = self._write_buff.pop()
             dev.write(d)
-        self.loop.call_later(0.005, self._write_tun, dev)
+        while len(self._read_buff) > 0:
+            d = self._read_buff.pop()
+            self._send_packet(d)
+        self.loop.call_later(0.0005, self._write_tun, dev)
             
     def _read_tun(self, dev):
         """
         read from tun interface
-        sends packets to remote endpoint
+        queue packets to remote endpoint sender
         """
         # read from interface
         self._log.debug("read tun")
@@ -94,7 +98,14 @@ class Handler(i2cp.I2CPHandler):
         # make a packet
         data = self._packet_factory(buff)
         # serialize packet to bytes
-        self._log.debug("write {} to {}".format(len(data), self._dest))
+        self._read_buff.append(data)
+        self._log.info("send q: {}".format('#' * len(self._read_buff)))
+        
+    def _send_packet(self, data):
+        """
+        send a packet of data
+        """
+        self._log.debug("write {} to {}".format(len(data), self._dest))        
         # send to endpoint
         self._conn.send_dsa_dgram(self._dest, data)
 
