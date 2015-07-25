@@ -67,7 +67,10 @@ class Handler(i2cp.I2CPHandler):
             self.loop.run_forever()
         finally:
             self.loop.close()
-        
+
+    def __del__(self):
+        curses.endwin()
+            
     def got_dgram(self, dest, data, srcport, dstport):
         #TODO: resolve self._dest to b32
         if dest.base32() == self._dest:
