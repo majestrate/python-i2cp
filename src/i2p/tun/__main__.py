@@ -85,7 +85,7 @@ class Handler(i2cp.I2CPHandler):
         # make a packet
         data = self._packet_factory(buff)
         # serialize packet to bytes
-        self._log.info("write {} to {}".format(len(data), self._dest)
+        self._log.info("write {} to {}".format(len(data), self._dest))
         # send to endpoint
         self._conn.send_dsa_dgram(self._dest, data)
 
