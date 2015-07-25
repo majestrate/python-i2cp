@@ -47,7 +47,7 @@ class Handler(i2cp.I2CPHandler):
 
     def session_ready(self, conn):
         self.loop.add_reader(self._tundev, self._read_tun, self._tundev)
-        self.loop.add_writer(self._tundev, self._write_tun, self._tundev)
+        self.loop.call_soon(self._write_tun, self._tundev)
         print ("interface ready")
         print ("we are {} talking to {}".format(self._conn.dest.base32(), self._dest))
 
@@ -75,11 +75,12 @@ class Handler(i2cp.I2CPHandler):
         we got a packet
         """
         self._write_buff.append(data)
-
+        
     def _write_tun(self, dev):
         while len(self._write_buff) > 0:
             d = self._write_buff.pop()
             dev.write(d)
+        self.loop.call_later(0.05, self._write_tun, dev)
             
     def _read_tun(self, dev):
         """
