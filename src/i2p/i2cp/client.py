@@ -554,7 +554,7 @@ class Connection(object):
         elif isinstance(name, datatypes.Destination):
             dest = name
         # ensure the data is bytes
-        if not isinstance(data, bytes) or not isinstance(data, bytearray):
+        if not isinstance(data, bytes) and not isinstance(data, bytearray):
             data = bytearray(data, 'utf-8')
         # if we don't have the destination in our cache
         # look it up
