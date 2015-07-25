@@ -443,12 +443,13 @@ class Connection(object):
         if payload.proto == datatypes.I2CPProtocol.DGRAM:
             self._log.debug('dgram payload=%s' % [ payload.data ])
             dgram = datatypes.dsa_datagram(raw=payload.data)
-            self.handler.got_dgram(dgram.dest, dgram.payload, payload.srcport, payload.dstport)
+            self._loop.call_soon(self.handler.got_dgram, dgram.dest, dgram.payload, payload.srcport, payload.dstport)
         elif payload.proto == datatypes.I2CPProtocol.RAW:
             self._log.debug('dgram-raw paylod=%s' % [ payload.data ])
-            self.handler.got_dgram(None, payload.data, payload.srcport, payload.dstport)
+            self._loop.call_soon(self.handler.got_dgram, None, dgram.payload, payload.srcport, payload.dstport)
         elif payload.proto == datatypes.I2CPProtocol.STREAMING:
             self._log.debug('streaming payload=%s' % [ payload.data ] )
+            self._loop.call_soon(self.handler.got_packet, dgram.payload, payload.srcport, payload.dstport)
             self.handler.got_packet(payload.data, payload.srcport, payload.dstport)
         else:
             self._log.warn('bad message payload')
