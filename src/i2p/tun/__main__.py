@@ -75,14 +75,13 @@ class Handler(i2cp.I2CPHandler):
         we got a packet
         """
         self._write_buff.append(data)
-        self._log.info("recv q: {}".format(len(self._write_buff)))
+        self._log.info("recv q: {}".format('#' * len(self._write_buff)))
         
     def _write_tun(self, dev):
         while len(self._write_buff) > 0:
             d = self._write_buff.pop()
             dev.write(d)
-        self._log.info("tun flush")
-        self.loop.call_later(0.05, self._write_tun, dev)
+        self.loop.call_later(0.005, self._write_tun, dev)
             
     def _read_tun(self, dev):
         """
@@ -95,7 +94,7 @@ class Handler(i2cp.I2CPHandler):
         # make a packet
         data = self._packet_factory(buff)
         # serialize packet to bytes
-        self._log.info("write {} to {}".format(len(data), self._dest))
+        self._log.debug("write {} to {}".format(len(data), self._dest))
         # send to endpoint
         self._conn.send_dsa_dgram(self._dest, data)
 
