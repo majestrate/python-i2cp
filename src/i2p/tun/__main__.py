@@ -37,6 +37,7 @@ class Handler(i2cp.I2CPHandler):
         self._read_buff = collections.deque()
         self.loop = loop or asyncio.get_event_loop()
         self._bw = 0
+        self._pps = 0
         self._scr = curses.initscr()
 
     def update_ui(self):
@@ -47,8 +48,10 @@ class Handler(i2cp.I2CPHandler):
         self._scr.addstr(4, 1, "write buff: {}".format('#' * len(self._write_buff)))
         self._scr.addstr(5, 1, "read buff:  {}".format('#' * len(self._read_buff)))
         self._scr.addstr(7, 1, "link speed: {} KBps".format(int(self._bw / 1024)))
+        self._scr.addstr(7, 1, "pkt/sec:    {} pps".format(self._pps))
         self._scr.refresh()
         self._bw = 0
+        self._pps = 0
         self.loop.call_later(1, self.update_ui)
         
     def session_made(self, conn):
@@ -105,10 +108,12 @@ class Handler(i2cp.I2CPHandler):
             d = self._write_buff.pop()
             dev.write(d)
             self._bw += len(d)
+            self._pps += 1
         while len(self._read_buff) > 0:
             d = self._read_buff.pop()
             self._send_packet(d)
             self._bw += len(d)
+            self._pps += 1
         self.loop.call_later(0.0005, self._pump_tun, dev)
             
     def _read_tun(self, dev):
