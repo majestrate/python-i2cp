@@ -18,6 +18,7 @@ import collections
 import logging
 import threading
 
+import curses
 
 class Handler(i2cp.I2CPHandler):
 
@@ -35,23 +36,32 @@ class Handler(i2cp.I2CPHandler):
         self._write_buff = collections.deque() 
         self._read_buff = collections.deque()
         self.loop = loop or asyncio.get_event_loop()
+        self._scr = curses.initscr()
 
+    def update_ui(self):
+        self._scr.clear()
+        self._scr.box()
+        self._scr.addstr(1, 1, "src: {}".format(self._conn.dest.base32()))
+        self._scr.addstr(2, 1, "dst: {}".format(self._dest))
+        self._scr.addstr(4, 1, "recv buff: {}".format('#' * len(self._recv_buff)))
+        self._scr.addstr(5, 1, "send buff: {}".format('#' * len(self._send_buff)))
+        self.loop.call_later(0.1, self.update_ui)
+        
     def session_made(self, conn):
         """
         we made a session with the i2p router
         set tun interface up, watch io on it
         """
         self._conn = conn
-        print("tun interace going up...")
+        self._scr.
         self._tundev.up()
         self._log.info("tun interface up")
+        
 
     def session_ready(self, conn):
         self.loop.add_reader(self._tundev, self._read_tun, self._tundev)
         self.loop.call_soon(self._pump_tun, self._tundev)
-        print ("interface ready")
-        print ("we are {} talking to {}".format(self._conn.dest.base32(), self._dest))
-
+        self.update_ui()
         
     def _run_loop(self):
         try:
@@ -77,6 +87,12 @@ class Handler(i2cp.I2CPHandler):
         """
         self._write_buff.append(data)
         self._log.info("recv q: {}".format('#' * len(self._write_buff)))
+
+    def get_status(self):
+        """
+        :return: r, w
+        """
+        return len(self._read_buff), len(self._write_buff)
         
     def _pump_tun(self, dev):
         while len(self._write_buff) > 0:
@@ -131,7 +147,7 @@ def main():
     if args.debug:
         lvl = logging.DEBUG
     else:
-        lvl = logging.INFO
+        lvl = logging.WARN
 
     i2cp_host = args.i2cp.split(":")[0]
     i2cp_port = int(args.i2cp.split(":")[-1])
