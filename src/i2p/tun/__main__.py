@@ -47,7 +47,14 @@ class Handler(i2cp.I2CPHandler):
         self.loop.add_reader(self._tundev, self._read_tun, self._tundev)
         print ("interface ready")
         print ("we are {} talking to {}".format(self._conn.dest.base32(), self._dest))
-        threading.Thread(target=self.loop.run_forever, args=tuple()).start()
+        self._thread = threading.Thread(target=self._run_loop)
+        self._thread.start()
+        
+    def _run_loop(self):
+        try:
+            self.loop.run_forever()
+        finally:
+            self.loop.close()
         
     def got_dgram(self, dest, data, srcport, dstport):
         #TODO: resolve self._dest to b32
@@ -61,6 +68,11 @@ class Handler(i2cp.I2CPHandler):
 
         else:
             self._log.warn("got unwarrented packets from {}".format(dest))
+
+    def stop(self):
+        self.loop.stop()
+        self._thread.join()
+        self.loop.close()
         
     def _read_tun(self, dev):
         """
@@ -129,7 +141,11 @@ def main():
     opts = {'inbound.length':'%d' % args.hops, 'outbound.length' :'%d' % args.hops}
     conn = i2cp.Connection(handler, i2cp_host=i2cp_host, i2cp_port=i2cp_port, keyfile=args.keyfile, loop=loop, session_options=opts)
     loop.run_until_complete(conn.open())
-    loop.run_forever()
+    try:
+        loop.run_forever()
+    finally:
+        if hasattr(handler, 'close'):
+            handler.close()
     
 
 if __name__ == "__main__":
