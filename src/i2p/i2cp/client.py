@@ -269,7 +269,7 @@ class Connection(object):
             with open(keyfile, 'wb') as wf:
                 wf.write(datatypes.Destination().serialize(priv=True))
         with open(keyfile, 'rb') as rf:
-            self.dest = datatypes.Destination(raw=rf)
+            self.dest = datatypes.Destination(raw=rf, private=True)
 
     def lookup_async(self, name, ftr=None, hook=None):
         """
