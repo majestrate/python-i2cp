@@ -46,6 +46,7 @@ class Handler(i2cp.I2CPHandler):
         self._scr.addstr(2, 1, "dst: {}".format(self._dest))
         self._scr.addstr(4, 1, "write buff: {}".format('#' * len(self._write_buff)))
         self._scr.addstr(5, 1, "read buff:  {}".format('#' * len(self._read_buff)))
+        self._scr.addstr(7, 1, "link speed: {}Bps".format(self._bw))
         self._scr.refresh()
         self._bw = 0
         self.loop.call_later(1, self.update_ui)
