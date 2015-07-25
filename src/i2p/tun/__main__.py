@@ -118,7 +118,8 @@ class Handler(i2cp.I2CPHandler):
             else:
                 self._read_buff.push_left(d)
                 break
-        self._send_packet(pkt)
+        if len(pkt) > 0:
+            self._send_packet(pkt)
 
         while len(self._write_buff) > 0:
             d = self._write_buff.pop()
