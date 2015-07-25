@@ -53,7 +53,6 @@ class Handler(i2cp.I2CPHandler):
         set tun interface up, watch io on it
         """
         self._conn = conn
-        self._scr.
         self._tundev.up()
         self._log.info("tun interface up")
         
