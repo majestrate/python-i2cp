@@ -85,7 +85,7 @@ class Handler(i2cp.I2CPHandler):
         # make a packet
         data = self._packet_factory(buff)
         # serialize packet to bytes
-        self._log.debug("write {} to {}".format(len(data), self._dest))
+        self._log.info("write {} to {}".format(len(data), self._dest)
         # send to endpoint
         self._conn.send_dsa_dgram(self._dest, data)
 
@@ -111,7 +111,7 @@ def main():
     if args.debug:
         lvl = logging.DEBUG
     else:
-        lvl = logging.WARN
+        lvl = logging.INFO
 
     i2cp_host = args.i2cp.split(":")[0]
     i2cp_port = int(args.i2cp.split(":")[-1])
