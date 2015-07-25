@@ -14,8 +14,10 @@ from i2p.tun import dht
 import trollius as asyncio
 from trollius import Return, From
 
+import collections
 import logging
 import threading
+
 
 class Handler(i2cp.I2CPHandler):
 
