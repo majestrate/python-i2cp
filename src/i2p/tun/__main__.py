@@ -25,7 +25,7 @@ class Handler(i2cp.I2CPHandler):
 
     _log = logging.getLogger("i2p.tun.Handler")
     
-    def __init__(self, remote_dest, tun, packet_factory, loop=None):
+    def __init__(self, remote_dest, tun, packet_factory, loop=None, noui=False):
         """
         :param tun: a i2p.tun.tundev.Interface instance, must already be configured and down
         """
@@ -39,18 +39,22 @@ class Handler(i2cp.I2CPHandler):
         self.loop = loop or asyncio.get_event_loop()
         self._bw = 0
         self._pps = 0
-        self._scr = curses.initscr()
+        if noui:
+            self._scr = None
+        else:
+            self._scr = curses.initscr()
 
     def update_ui(self):
-        self._scr.clear()
-        self._scr.box()
-        self._scr.addstr(1, 1, "src: {}".format(self._conn.dest.base32()))
-        self._scr.addstr(2, 1, "dst: {}".format(self._dest))
-        self._scr.addstr(4, 1, "write buff: {}".format('#' * len(self._write_buff)))
-        self._scr.addstr(5, 1, "read buff:  {}".format('#' * len(self._read_buff)))
-        self._scr.addstr(7, 1, "link speed: {} KBps".format(int(self._bw / 1024)))
-        self._scr.addstr(8, 1, "pkt/sec:    {} pps".format(self._pps))
-        self._scr.refresh()
+        if self._scr:
+            self._scr.clear()
+            self._scr.box()
+            self._scr.addstr(1, 1, "src: {}".format(self._conn.dest.base32()))
+            self._scr.addstr(2, 1, "dst: {}".format(self._dest))
+            self._scr.addstr(4, 1, "write buff: {}".format('#' * len(self._write_buff)))
+            self._scr.addstr(5, 1, "read buff:  {}".format('#' * len(self._read_buff)))
+            self._scr.addstr(7, 1, "link speed: {} KBps".format(int(self._bw / 1024)))
+            self._scr.addstr(8, 1, "pkt/sec:    {} pps".format(self._pps))
+            self._scr.refresh()
         self._bw = 0
         self._pps = 0
         self.loop.call_later(1, self.update_ui)
@@ -87,7 +91,6 @@ class Handler(i2cp.I2CPHandler):
                 self._log.warn("drop packet too big: {} > {} (mtu)".format(dlen, self._mtu))
             else:
                 self._recv_packet(data)
-
         else:
             self._log.warn("got unwarrented packets from {}".format(dest))
 
@@ -106,15 +109,20 @@ class Handler(i2cp.I2CPHandler):
         
     def _pump_tun(self, dev):
         pkt = bytearray()
-        while len(self._read_buff) > 0 and len(pkt) < self._mtu:
+        
+        while len(self._read_buff) > 0:
             d = self._read_buff.pop()
-            pkt += struct.pack('>H', len(d))
-            pkt += d
+            if 2 + d + len(pkt) < self._mtu:
+                pkt += struct.pack('>H', len(d))
+                pkt += d
+            else:
+                self._read_buff.push_left(d)
+                break
         self._send_packet(pkt)
 
         while len(self._write_buff) > 0:
-            self._pps += 1
             d = self._write_buff.pop()
+            self._pps += 1
             print(len(d))
             while len(d) > 0:
                 pktlen = struct.unpack('>H', d[:2])
@@ -133,12 +141,8 @@ class Handler(i2cp.I2CPHandler):
         # read from interface
         self._log.debug("read tun")
         buff = dev.read(self._mtu)
-        # make a packet
-        data = self._packet_factory(buff)
-        # serialize packet to bytes
-        self._read_buff.append(data)
-        self._log.info("send q: {}".format('#' * len(self._read_buff)))
-        
+        self._read_buff.append(buff)
+
     def _send_packet(self, data):
         """
         send a packet of data
@@ -164,6 +168,7 @@ def main():
     ap.add_argument("--keyfile", type=str, default="i2p.tun.key", help="i2cp destination keys")
     ap.add_argument("--debug", action="store_const", const=True, default=False, help="toggle debug mode")
     ap.add_argument("--tap", action="store_const", const=True, default=False, help="use tap instead of tun")
+    ap.add_argument("--noui", action="store_const", const=True, default=False, help="do we disable the ui?")
     args = ap.parse_args()
 
     log = logging.getLogger("i2p.tun")
@@ -196,7 +201,7 @@ def main():
         tun.mtu = args.mtu
         tun.netmask = args.netmask
         # make handler
-        handler = Handler(args.remote, tun, lambda x : x, loop)
+        handler = Handler(args.remote, tun, lambda x : x, loop, args.noui)
 
     opts = {'inbound.length':'%d' % args.hops, 'outbound.length' :'%d' % args.hops}
     opts['outbound.quantity'] = '2'
