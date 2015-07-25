@@ -346,7 +346,7 @@ class Destination(object):
             # No KeyCert, so defaults to ElGamal/DSA
             encpub = data[:256]
             sigpub = data[256:384]
-            if len(rest) and private
+            if len(rest) and private:
                 encpriv = rest[:256]
                 sigpriv = rest[256:276]
                 return crypto.ElGamalKey(encpub, encpriv), \
