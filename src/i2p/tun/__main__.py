@@ -85,7 +85,7 @@ class Handler(i2cp.I2CPHandler):
         while len(self._read_buff) > 0:
             d = self._read_buff.pop()
             self._send_packet(d)
-        self.loop.call_later(0.0005, self._write_tun, dev)
+        self.loop.call_later(0.0005, self._pump_tun, dev)
             
     def _read_tun(self, dev):
         """
