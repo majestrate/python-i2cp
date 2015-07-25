@@ -6,6 +6,7 @@ import queue
 import socket
 import struct
 import time
+import collections
 import functools
 from i2p import crypto, datatypes
 from . import exceptions
@@ -191,6 +192,8 @@ class Connection(object):
         # unused
         self._lookup = None
         self._done = False
+        # message send queue
+        self._sendq = collections.deque()
         # Our destination. Contains our private keys.
         self.dest = None
         # state stuff
@@ -354,9 +357,26 @@ class Connection(object):
         # fire off get date message
         msg = messages.GetDateMessage(version=self._i2cp_version)
         self._async(self._send_msg(msg))
+        self._loop.call_soon(self._pump_send)
         # start recving messages
         self._recv_process()
 
+    def _pump_send(self):
+        self._log.debug("pump send")
+        if len(self._sendq) > 0:
+            msg = self._sendq.pop()
+            tsk = self._send_msg(msg)
+            tsk.add_done_callback(self._msg_sent)
+        else:
+            # delayed recall
+            self._loop.call_later(0.1, self._pump_send)
+            
+    def _msg_sent(self, ftr):
+        """
+        we sent a message yay
+        """
+        self._log.debug("sent")
+        self._loop.call_soon(self._pump_send)
 
     @asyncio.coroutine
     def lookup(self, name):
@@ -546,11 +566,17 @@ class Connection(object):
             p = datatypes.i2cp_payload(data=dgram.serialize(), srcport=srcport, dstport=dstport, proto=dgram_class.protocol)
             msg = messages.SendMessageMessage(sid=self._sid, dest=dest, payload=p.serialize())
             # send it safely
-            self._loop.call_soon_threadsafe(self._async, self._send_msg(msg))
+            self._loop.call_soon_threadsafe(self._queue_send, msg)
         else:
             # look up the name
             self._issue_lookup(name)
 
+    def _queue_send(self, msg):
+        """
+        queue a message to be sent
+        """
+        self._sendq += msg
+            
     def _issue_lookup(self, name):
         # don't call lookup async many times if we are already pending
         if not self._has_lookup_job(name):
