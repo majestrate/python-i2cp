@@ -120,6 +120,7 @@ class Handler(i2cp.I2CPHandler):
                 d = d[2:]
                 self._bw += pktlen
                 dev.write(d[:pktlen])
+                d = d[pktlen:]
             
         self.loop.call_later(0.1, self._pump_tun, dev)
             
