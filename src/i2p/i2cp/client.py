@@ -356,7 +356,7 @@ class Connection(object):
         self._log.debug('begin_session()')
         # fire off get date message
         msg = messages.GetDateMessage(version=self._i2cp_version)
-        self._async(self._send_msg(msg))
+        self._queue_send(msg)
         self._loop.call_soon(self._pump_send)
         # start recving messages
         self._recv_process()
@@ -369,7 +369,7 @@ class Connection(object):
             tsk.add_done_callback(self._msg_sent)
         else:
             # delayed recall
-            self._loop.call_later(0.1, self._pump_send)
+            self._loop.call_later(0.005, self._pump_send)
             
     def _msg_sent(self, ftr):
         """
