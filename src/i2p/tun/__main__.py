@@ -66,7 +66,7 @@ class Handler(i2cp.I2CPHandler):
             if dlen > self._mtu:
                 self._log.warn("drop packet too big: {} > {} (mtu)".format(dlen, self._mtu))
             else:
-                self.loop.call_soon(self._recv_packet, data)
+                self._recv_packet(data)
 
         else:
             self._log.warn("got unwarrented packets from {}".format(dest))
