@@ -81,6 +81,7 @@ class Handler(i2cp.I2CPHandler):
         while len(self._write_buff) > 0:
             d = self._write_buff.pop()
             dev.write(d)
+        self._log.info("tun flush")
         self.loop.call_later(0.05, self._write_tun, dev)
             
     def _read_tun(self, dev):
