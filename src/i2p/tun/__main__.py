@@ -43,8 +43,8 @@ class Handler(i2cp.I2CPHandler):
         self._scr.box()
         self._scr.addstr(1, 1, "src: {}".format(self._conn.dest.base32()))
         self._scr.addstr(2, 1, "dst: {}".format(self._dest))
-        self._scr.addstr(4, 1, "recv buff: {}".format('#' * len(self._recv_buff)))
-        self._scr.addstr(5, 1, "send buff: {}".format('#' * len(self._send_buff)))
+        self._scr.addstr(4, 1, "write buff: {}".format('#' * len(self._write_buff)))
+        self._scr.addstr(5, 1, "read buff:  {}".format('#' * len(self._read_buff)))
         self.loop.call_later(0.1, self.update_ui)
         
     def session_made(self, conn):
