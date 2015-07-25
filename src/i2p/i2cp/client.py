@@ -365,7 +365,7 @@ class Connection(object):
         self._log.debug("pump send")
         if len(self._sendq) > 0:
             msg = self._sendq.pop()
-            tsk = self._send_msg(msg)
+            tsk = self._async(self._send_msg(msg))
             tsk.add_done_callback(self._msg_sent)
         else:
             # delayed recall
