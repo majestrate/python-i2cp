@@ -112,7 +112,7 @@ class Handler(i2cp.I2CPHandler):
         
         while len(self._read_buff) > 0:
             d = self._read_buff.pop()
-            if 2 + d + len(pkt) < self._mtu:
+            if 2 + len(d) + len(pkt) < self._mtu:
                 pkt += struct.pack('>H', len(d))
                 pkt += d
             else:
