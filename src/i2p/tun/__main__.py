@@ -139,6 +139,8 @@ def main():
         handler = Handler(args.remote, tun, lambda x : x)
 
     opts = {'inbound.length':'%d' % args.hops, 'outbound.length' :'%d' % args.hops}
+    opts['outbound.quantity'] = '8'
+    opts['inbound.quntity'] = '2'
     conn = i2cp.Connection(handler, i2cp_host=i2cp_host, i2cp_port=i2cp_port, keyfile=args.keyfile, loop=loop, session_options=opts)
     loop.run_until_complete(conn.open())
     try:
