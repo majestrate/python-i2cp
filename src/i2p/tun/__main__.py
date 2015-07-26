@@ -131,7 +131,7 @@ class Handler(i2cp.I2CPHandler):
                 dev.write(d[:pktlen])
                 d = d[pktlen:]
             
-        self.loop.call_later(0.01, self._pump_tun, dev)
+        self.loop.call_later(0.05, self._pump_tun, dev)
             
     def _read_tun(self, dev):
         """
