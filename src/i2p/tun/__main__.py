@@ -116,7 +116,7 @@ class Handler(i2cp.I2CPHandler):
                 pkt += struct.pack('>H', len(d))
                 pkt += d
             else:
-                self._read_buff.push_left(d)
+                self._read_buff.appendleft(d)
                 break
         if len(pkt) > 0:
             self._send_packet(pkt)
