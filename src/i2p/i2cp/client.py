@@ -369,7 +369,7 @@ class Connection(object):
             tsk.add_done_callback(self._msg_sent)
         else:
             # delayed recall
-            self._loop.call_later(0.005, self._pump_send)
+            self._loop.call_later(0.05, self._pump_send)
             
     def _msg_sent(self, ftr):
         """
