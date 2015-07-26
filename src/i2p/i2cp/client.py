@@ -447,6 +447,7 @@ class Connection(object):
         """
         self._log.debug('handle vls message')
         dummy_sigkey = crypto.DSAKey()
+        self._enckey =crypto.ElGamalKey()
         #enckey = self.dest.enckey
         sigkey = self.dest.sigkey
         ls = datatypes.LeaseSet(leases=msg.leases, dest=self.dest, ls_enckey=self._enckey, ls_sigkey=sigkey)
