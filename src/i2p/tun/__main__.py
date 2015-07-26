@@ -169,6 +169,8 @@ def main():
     ap.add_argument("--debug", action="store_const", const=True, default=False, help="toggle debug mode")
     ap.add_argument("--tap", action="store_const", const=True, default=False, help="use tap instead of tun")
     ap.add_argument("--noui", action="store_const", const=True, default=False, help="do we disable the ui?")
+    ap.add_argument("--ob", type=int, default=4 help="outbound tunnel quantity")
+    ap.add_argument("--ib", type=int, default=4, help="inbound tunnel quantity")
     args = ap.parse_args()
 
     log = logging.getLogger("i2p.tun")
@@ -204,8 +206,8 @@ def main():
         handler = Handler(args.remote, tun, lambda x : x, loop, args.noui)
 
     opts = {'inbound.length':'%d' % args.hops, 'outbound.length' :'%d' % args.hops}
-    opts['outbound.quantity'] = '8'
-    opts['inbound.quantity'] = '4'
+    opts['outbound.quantity'] = str(args.ob)
+    opts['inbound.quantity'] = str(args.ib)
     conn = i2cp.Connection(handler, i2cp_host=i2cp_host, i2cp_port=i2cp_port, keyfile=args.keyfile, loop=loop, session_options=opts)
     loop.run_until_complete(conn.open())
     try:
