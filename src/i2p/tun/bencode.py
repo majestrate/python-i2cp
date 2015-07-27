@@ -67,18 +67,15 @@ def _decode(data):
         return _decode_dict(data)
     elif ch.isdigit():
         return _decode_str(data)
-    else:
-        raise Exception('could not deserialize data: %s'%data)
 
 def decode(data):
     """
     decode a bytearray
-    return deserialized object
+    return deserialized object or None
     """
     obj , data = _decode(data)
-    if len(data) > 0:
-        raise Exception('failed to deserialize, extra data: %s'%data)
-    return obj
+    if data and len(data) == 0:
+        return obj
 
 def _encode_str(s,buff):
     """
