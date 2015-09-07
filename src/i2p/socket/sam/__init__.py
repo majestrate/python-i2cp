@@ -18,15 +18,22 @@ SHUT_RDWR = pysocket.SHUT_RDWR
 # what! 9000?!
 AF_SAM = 9002
 
-def socket(family=None, type=SOCK_STREAM, proto=0, fileno=None, samaddr=('127.0.0.1', 7656)):
-    """
-    create a socket
-    :param family: always set to AF_SAM, any other value will be ignored
-    :param type: the type of connection, SOCK_STREAM / SOCK_DGRAM etc
-    :param proto: unused at the moment
-    :param samaddr: address of sam interface
-    """
-    if type in [SOCK_DGRAM, SOCK_RAW, SOCK_STREAM]:
-        return simple.Socket(samaddr, type)
-    else:
-        raise ValueError("invalid socket type: {}".format(type))
+class socket:
+
+    def __init__(self, family=None, type=SOCK_STREAM, proto=0, fileno=None, samaddr=('127.0.0.1', 7656)):
+        """
+        create a socket
+        :param family: always set to AF_SAM, any other value will be ignored
+        :param type: the type of connection, SOCK_STREAM / SOCK_DGRAM etc
+        :param proto: unused at the moment
+        :param samaddr: address of sam interface
+        """
+        if type in [SOCK_DGRAM, SOCK_RAW, SOCK_STREAM]:
+            return simple.Socket(samaddr, type)
+        else:
+            raise ValueError("invalid socket type: {}".format(type))
+
+def create_connection(address, timeout=60, source_address=None):
+    s = socket()
+    s.connect(address)
+    return s
