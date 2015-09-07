@@ -76,84 +76,9 @@ connect to other destinations from those destinations persisting the destination
 Or not, It cam be transient. The power is in your hands.These  i2p sockets can
 be used with the select module as they implement the fileno() method.
 
-BUT WAIT! THERE'S MORE!!
-
-The i2p.socket module comes with an asyncio like interface
-
-    # import it!
-    from i2p.socket import async
-
-    # connect it!
-    r, w = yield from async.open_connection("psi.i2p", 80)
-
-    # send it!
-    w.write(b'GET / HTTP/1.0\\\r\\\n')
-    _ = yield from w.drain()
-
-    # receive it!
-    while True:
-      line = yield from r.readline()
-      if len(line) > 0:
-        print (line)
-        continue
-      break
-
-    # close it!
-    w.close()
-
-All this and more available now on pypi now.
-
 Install today!
 """
 
-import atexit
-
-from .socket import *
-from .exceptions import error, herror, gaierror, timeout
-
-
-_interface = None
-
-def _close_module_interface():
-    global _interface
-    if _interface is None:
-        return
-    _interface.close()
-    _interface = None
-
-def get_default_interface():
-    """
-    :return: the default i2cp connection used in i2p.socket
-    """
-    global _interface
-    if _interface is None:
-        _interface = create_interface()
-    return _interface
-
-def socket(af=AF_I2CP, type=SOCK_STREAM, flags=None):
-    """
-    :param af: must be i2p.socket.AF_I2CP for now, in the future it could be i2p.socket.AF_SAM
-    :param type: i2p.socket.SOCK_*
-    :param flags: unused
-    """
-    if af == AF_I2CP:
-        global _interface
-        if _interface is None:
-            _interface = create_interface()
-        return _interface.socket(af, type, flags)
-    elif af == AF_SAM:
-        raise NotImplemented()
-    else:
-        raise Exception("invalid address family: {}".format(af))
-
-def create_connection(address, timeout=30, source_address=None):
-    """
-    socket.create_connection stub for i2p.socket
-    :param address: (host, port) tuple
-    :param timeout: connection timeout
-    :param source_address: unused
-    """
-    sock = socket(AF_I2CP, SOCK_STREAM)
-    return sock.connect(address)
-
-close = _close_module_interface
+from i2p.socket.exceptions import error, herror, gaierror, timeout
+# default to sam backend
+from i2p.socket.sam import *

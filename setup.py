@@ -27,8 +27,8 @@ if sys.version_info[0] < 3:
 version = '0.1.0'
 
 setup(
-    name='i2p.i2cp',
-    description='I2CP client library for I2P',
+    name='i2p',
+    description='I2P client API library',
     long_description=long_description,
     author='Jeff',
     author_email='ampernand@gmail.com',
@@ -50,5 +50,5 @@ setup(
     version=version,
     install_requires=install_requires,
     package_dir={'': 'src'},
-    packages=['i2p', 'i2p.i2cp', 'i2p.tun'],
+    packages=['i2p', 'i2p.i2cp', 'i2p.tun', 'i2p.socket'],
 )
