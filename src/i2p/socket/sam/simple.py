@@ -331,8 +331,9 @@ class Socket(object):
         """
         close the connection
         """
+        self._state = State.Closing
         self._samSocket.close()
-        
+        self._state = State.Closed
         
     @samState(State.Established, State.Running, State.Ready, State.Connecting)
     def lookup(self, name):
