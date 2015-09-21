@@ -248,9 +248,12 @@ class Socket(object):
                 data = f.read()
                 self._keys = data.strip()
         cmd = 'SESSION CREATE STYLE={} DESTINATION={} ID={}'.format(style, self._keys, nickname)
+
         for opt in i2cpOptions:
             cmd += " {}={}".format(opt, i2cpOptions[opt])
+
         repl = _sam_cmd(self._samSocket, cmd)
+
         if repl.opts['RESULT'] == 'OK':
             self._keys = repl.opts['DESTINATION']
             if keyfile:
