@@ -38,7 +38,7 @@ def main():
     ap.add_argument("--debug", action="store_const", const=True, default=False, help="toggle debug mode")
     ap.add_argument("--tap", action="store_const", const=True, default=False, help="use tap instead of tun")
     ap.add_argument("--noui", action="store_const", const=True, default=False, help="do we disable the ui?")
-    ap.add_argument("--ob", type=int, default=4 help="outbound tunnel quantity")
+    ap.add_argument("--ob", type=int, default=4, help="outbound tunnel quantity")
     ap.add_argument("--ib", type=int, default=4, help="inbound tunnel quantity")
     args = ap.parse_args()
 
