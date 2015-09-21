@@ -128,7 +128,8 @@ class Socket(object):
     """
 
     _log = logging.getLogger("i2p.socket.sam.simple.BaseSocket")
-
+    _dgram_bind = "127.0.0.1"
+    
     def samState(*states):
         def f(func):
             def check_state(self, *args_inner, **kwargs_inner):
@@ -167,12 +168,13 @@ class Socket(object):
             return func(self, *args, **kwargs)
         return check_connect
     
-    def __init__(self, samaddr, socketType):
+    def __init__(self, samaddr, dgramAddr, socketType):
         """
         :param samaddr: the socket address for sam
         """
         if samaddr:
             self._samAddr = samaddr
+            self._samDgramAddr = dgramAddr
             self._samSocket = None
             self._data_sock = None
             self._state = State.Initial
@@ -238,7 +240,12 @@ class Socket(object):
         if self._type == SAM.SOCK_STREAM:
             style = "STREAM"
         elif self._type == SAM.SOCK_DGRAM:
-            style = "DGRAM"
+            style = "DATAGRAM"
+            self._dgram_sock = pysocket.socket(type=pysocket.SOCK_DGRAM)
+            self._dgram_sock.bind((self._dgram_bind, 0))
+            port = self._dgram_sock.getsockname()[1]
+            i2cpOptions["HOST"] = self._dgram_bind
+            i2cpOptions["PORT"] = port
         else:
             style = "RAW"
             
@@ -250,6 +257,7 @@ class Socket(object):
         cmd = 'SESSION CREATE STYLE={} DESTINATION={} ID={}'.format(style, self._keys, nickname)
         for opt in i2cpOptions:
             cmd += " {}={}".format(opt, i2cpOptions[opt])
+
         repl = _sam_cmd(self._samSocket, cmd)
         if repl.opts['RESULT'] == 'OK':
             self._keys = repl.opts['DESTINATION']
@@ -309,7 +317,17 @@ class Socket(object):
         :param buff: bytearray
         :return count:
         """
-
+        # first look up the name
+        remote_dest = self.lookup(address[0])
+        if remote_dest:
+            dgram = bytearray()
+            dgram += "3.0 "
+            dgram += self._nick + " "
+            dgram += remote_dest + "\n"
+            dgram += data
+            return self._dgram_sock.sendto(self._samDgramAddr, dgram)
+        
+            
     @samState(State.Running)
     @samType(SAM.SOCK_DGRAM, SAM.SOCK_RAW)
     def recvfrom(self, buffersize, flags=0):
@@ -318,7 +336,20 @@ class Socket(object):
         :param buffersize: number of bytes to recv max
         :return (data, addressInfo):
         """
-
+        while True:
+            data, addr = self._dgram_sock.recvfrom(buffersize)
+            if addr == self._samDgramAddr:
+                # only accept packets from the sam udp address
+                idx = data.index(b'\n')
+                return data[:idx], data[1+idx:]
+        
+        
+    def fileno(self):
+        if self._type == SAM.SOCK_STREAM:
+            return self._data_sock.fileno()
+        elif self._type == SAM.SOCK_DGRAM:
+            return self._dgram_sock.fileno()
+        
     @samState(State.Running)
     def shutdown(self, flag):
         """

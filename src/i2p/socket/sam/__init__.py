@@ -20,7 +20,7 @@ AF_SAM = 9002
 
 class socket:
 
-    def __init__(self, family=None, type=SOCK_STREAM, proto=0, fileno=None, samaddr=('127.0.0.1', 7656)):
+    def __init__(self, family=None, type=SOCK_STREAM, proto=0, fileno=None, samaddr=('127.0.0.1', 7656), dgramaddr=('127.0.0.1', 7655)):
         """
         create a socket
         :param family: always set to AF_SAM, any other value will be ignored
@@ -29,7 +29,15 @@ class socket:
         :param samaddr: address of sam interface
         """
         if type in [SOCK_DGRAM, SOCK_RAW, SOCK_STREAM]:
-            return simple.Socket(samaddr, type)
+            sock = simple.Socket(samaddr, dgramaddr, type)
+            self.recv = sock.recv
+            self.close = sock.close
+            self.bind = sock.bind
+            self.send = sock.send
+            self.connect = sock.connect
+            self.sendto = sock.sendto
+            self.recvfrom = sock.recvfrom
+            self.fileno = sock.fileno
         else:
             raise ValueError("invalid socket type: {}".format(type))
 
@@ -37,3 +45,7 @@ def create_connection(address, timeout=60, source_address=None):
     s = socket()
     s.connect(address)
     return s
+
+def getaddrinfo(host, *args, **kwargs):
+    return [(AF_SAM, SOCK_STREAM, 0, host, 0)]
+
