@@ -37,10 +37,11 @@ class Clumping:
         """
         type, packets = struct.unpack('>HH', data[:4])
         data = data[4:]
-        for _ in range(packets):
-            l = struct.unpack('>H', data[:2])[0]
-            yield self.Packet(self.FrameType(type), data[2:2+l])
-            data = data[2+l:]
+        if packets > 0:
+            for _ in range(packets):
+                l = struct.unpack('>H', data[:2])[0]
+                yield self.Packet(self.FrameType(type), data[2:2+l])
+                data = data[2+l:]
 
     def _create_frame(self, packets, type):
         """
