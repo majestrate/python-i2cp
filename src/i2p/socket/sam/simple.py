@@ -248,9 +248,9 @@ class Socket(object):
         elif self._type == SAM.SOCK_DGRAM:
             style = "DATAGRAM"
             self._dgram_sock = pysocket.socket(type=pysocket.SOCK_DGRAM)
-            self._dgram_sock.bind((self._dgram_bind, 0))
+            self._dgram_sock.bind(self._dgram_bind)
             port = self._dgram_sock.getsockname()[1]
-            i2cpOptions["HOST"] = self._dgram_bind
+            i2cpOptions["HOST"] = self._dgram_bind[0]
             i2cpOptions["PORT"] = port
         else:
             style = "RAW"
