@@ -38,6 +38,7 @@ class socket:
             self.sendto = sock.sendto
             self.recvfrom = sock.recvfrom
             self.fileno = sock.fileno
+            self.getsocketinfo = sock.getsocketinfo
         else:
             raise ValueError("invalid socket type: {}".format(type))
 

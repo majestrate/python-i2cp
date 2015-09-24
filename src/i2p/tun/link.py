@@ -1,7 +1,9 @@
 
 from i2p import socket
-import asyncio
+from i2p.datatypes import Destination
+import trollius as asyncio
 import collections
+import logging
 
 class SAMLink:
 
@@ -9,38 +11,38 @@ class SAMLink:
 
     _pump_interval = 0.01
 
-    def __init__(self, switch, link_protocol, keyfile, loop=None):
+    def __init__(self, remote, tundev, switch, protocol, keyfile, samcfg=None, loop=None):
         """
         """
         self._switch = switch
+        self._remote_dest = remote
+        self._tundev = tundev
         self._protocol = protocol
         self._write_buff = collections.deque() 
         self._read_buff = collections.deque()
         self.loop = loop or asyncio.get_event_loop()
         self._bw = 0
         self._pps = 0
-        self._conn = socket.socket(type=socket.SOCK_DGRAM)
-        self._conn.bind(keyfile)
-        
-        
-    def _tun_up(self, localaddr, remoteaddr, netmask):
-        self._switch.setTunAddr(localaddr, remoteaddr, netmask)
-        self._switch.tunIfaceUp()
-        self._log.info("tun interface up")
-            
-    def got_dgram(self, dest, data):
-        dlen = len(data)
-        if dlen > self._mtu:
-            self._log.warn("drop packet too big: {} > {} (mtu)".format(dlen, self._mtu))
+        self._log.debug("creating sam")
+        if samcfg:
+            samaddr = (samcfg["controlHost"], samcfg["controlPort"])
+            dgramaddr = (samcfg["dgramHost"], samcfg["dgramPort"])
+            self._conn = socket.socket(type=socket.SOCK_DGRAM, samaddr=samaddr, dgramaddr=dgramaddr)
         else:
-            self._recv_packet(dest, data)
-
-    def _recv_packet(self, dest, data):
+            self._conn = socket.socket(type=socket.SOCK_DGRAM)
+        self._conn.bind(keyfile)
+        self._log.debug("sam bound")
+        self.dest = Destination(raw=self._conn.getsocketinfo(), b64=True)
+        self.loop.add_reader(self._tundev, self._read_tun)
+        self.loop.add_reader(self._conn, self._read_sock)
+        self.loop.call_soon(self._pump)
+        
+    def got_dgram(self, dest, data):
         """
         we got a packet
         """
+        self._log.debug('got dgram')
         self._write_buff.append((dest,data))
-        self._log.info("recv q: {}".format('#' * len(self._write_buff)))
 
     def get_status(self):
         """
@@ -48,13 +50,13 @@ class SAMLink:
         """
         return len(self._read_buff), len(self._write_buff)
     
-    def _pump_tun(self):
+    def _pump(self):
         # pump rpc
-        if len(self._rpc_buff) > 0:
-            frames = self._protocol.createFrames(self._rpc_buff, self._protocol.FrameType.Control)
-            for frame in frames:
-                self._send_packet(dest, frame.data)
-            self._rpc_buff = collections.deque()
+        #if len(self._rpc_buff) > 0:
+        #    frames = self._protocol.createFrames(self._rpc_buff, self._protocol.FrameType.Control)
+        #    for frame in frames:
+        #        self._send_packet(dest, frame.data)
+        #    self._rpc_buff = collections.deque()
 
         # create frame to send to remote
         if len(self._read_buff) > 0:
@@ -67,7 +69,7 @@ class SAMLink:
                 pkts[ip].append(buff)
             
             # make frames
-            for ip, buff, in pkts.iteritems():
+            for ip, buff, in pkts.items():
                 # create frames
                 frames = self._protocol.createFrames(buff, self._protocol.FrameType.IP)
                 # get dest for ip
@@ -95,8 +97,12 @@ class SAMLink:
                     elif pkt.type == self._protocol.FrameType.KeepAlive:
                         # keep this guy alive
                         self._keep_alive(dest)
+                    else:
+                        self._log.warn('invalid packet type in frame: {}'.format(pkt.type))
+            else:
+                self._log.warn('no data in frame')
         # call again
-        self.loop.call_later(self._pump_interval, self._pump_tun)
+        self.loop.call_later(self._pump_interval, self._pump)
 
 
     def _handle_control(self, dest, data):
@@ -114,19 +120,30 @@ class SAMLink:
         :param dest: the remote destination
         :param pktdata: bytearray of packet data
         """
+        # TODO: filter packets
+        # schedule it
+        self._log.debug('write ip')
+        self.loop.call_soon(self._tundev.write, pktdata)
         
         
-    def _read_tun(self, dev):
+    def _read_tun(self):
         """
         read from tun interface
         queue packets to remote endpoint sender
         """
-        # read from interface
-        self._log.debug("read tun")
-        buff = dev.read(self._mtu)
-        self._read_buff.append(buff)
+        # read packet + overhead
+        self._log.debug('readtun')
+        buff = self._tundev.read(self._protocol.mtu + 64)
+        self._read_buff.append((None, buff))
 
-    def _send_packet(self,dest, data):
+    def _read_sock(self):
+        self._log.debug('read sock')
+        result = self._conn.recvfrom(self._protocol.mtu + 64)
+        if result:
+            dest, pkt = result
+            self.got_dgram(dest, pkt)
+            
+    def _send_packet(self, dest, data):
         """
         send a packet of data
         """
@@ -134,4 +151,10 @@ class SAMLink:
         self._bw += len(data)
         self._log.debug("write {} to {}".format(len(data), dest))        
         # send to endpoint
-        self._conn.sendto(dest, data)
+        self._conn.sendto(data, (dest,0))
+
+    def _get_dest_for_ip(self, ip):
+        return self._switch.destForIP(ip)
+
+
+Handler = SAMLink

@@ -1,7 +1,8 @@
 from enum import Enum
 import collections
+import struct
 
-CumpingPacket = namedtuple("ClumpingPacket", ["type", "data"])
+ClumpingPacket = collections.namedtuple("ClumpingPacket", ["type", "data"])
 
 class ClumpingFrameType(Enum):
     """
@@ -27,13 +28,19 @@ class Clumping:
     _packet_overhead = 2
     
     def __init__(self, mtu):
-        self._mtu = int(mtu)
+        self.mtu = int(mtu)
     
     def parseFrame(self, data):
         """
         :param data: bytearray
-        :returns a list of Packet instances:
+        :returns a generator of all packets:
         """
+        type, packets = struct.unpack('>HH', data[:4])
+        data = data[4:]
+        for _ in range(packets):
+            l = struct.unpack('>H', data[:2])[0]
+            yield self.Packet(self.FrameType(type), data[2:2+l])
+            data = data[2+l:]
 
     def _create_frame(self, packets, type):
         """
@@ -44,7 +51,9 @@ class Clumping:
         fr += struct.pack('>H', type.value)
         fr += struct.pack('>H', len(packets))
         for pkt in packets:
-            
+            fr += struct.pack('>H', len(pkt))
+            fr += pkt
+        return ClumpingPacket(type, fr)
 
     def createFrames(self, packets, type):
         """
@@ -55,9 +64,9 @@ class Clumping:
         current_frame_packets = list()
         current_frame_size = self._frame_overhead
         for pkt in packets:
-            if current_frame_size + len(pkt.data) < self._mtu:
+            if current_frame_size + len(pkt) < self.mtu:
                 current_frame_packets.append(pkt)
-                current_frame_size += len(pkt.data) + self._packet_overhead
+                current_frame_size += len(pkt) + self._packet_overhead
             else:
                 yield self._create_frame(current_frame_packets, type)
                 current_frame_packets = list()
