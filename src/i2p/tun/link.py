@@ -31,7 +31,7 @@ class SAMLink:
             self._conn = socket.socket(type=socket.SOCK_DGRAM, samaddr=samaddr, dgramaddr=dgramaddr, dgrambind=dgrambind)
         else:
             self._conn = socket.socket(type=socket.SOCK_DGRAM)
-        self._conn.bind(keyfile)
+        self._conn.bind(keyfile, nickname="samtun")
         self._log.debug("sam bound")
         self.dest = Destination(raw=self._conn.getsocketinfo(), b64=True)
         self.loop.add_reader(self._tundev, self._read_tun)
