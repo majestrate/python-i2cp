@@ -61,16 +61,17 @@ class Clumping:
         :param type: link level frame type
         :returns a generator yielding each frame created:
         """
-        current_frame_packets = list()
-        current_frame_size = self._frame_overhead
-        for pkt in packets:
-            if current_frame_size + len(pkt) < self.mtu:
-                current_frame_packets.append(pkt)
-                current_frame_size += len(pkt) + self._packet_overhead
-            else:
-                yield self._create_frame(current_frame_packets, type)
-                current_frame_packets = list()
-        yield self._create_frame(current_frame_packets, type)
+        if len(packets) > 0:
+            current_frame_packets = list()
+            current_frame_size = self._frame_overhead
+            for pkt in packets:
+                if current_frame_size + len(pkt) < self.mtu:
+                    current_frame_packets.append(pkt)
+                    current_frame_size += len(pkt) + self._packet_overhead
+                else:
+                    yield self._create_frame(current_frame_packets, type)
+                    current_frame_packets = list()
+            yield self._create_frame(current_frame_packets, type)
 
             
 
