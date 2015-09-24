@@ -20,7 +20,7 @@ AF_SAM = 9002
 
 class socket:
 
-    def __init__(self, family=None, type=SOCK_STREAM, proto=0, fileno=None, samaddr=('127.0.0.1', 7656), dgramaddr=('127.0.0.1', 7655)):
+    def __init__(self, family=None, type=SOCK_STREAM, proto=0, fileno=None, samaddr=('127.0.0.1', 7656), dgramaddr=('127.0.0.1', 7655), dgrambind=('127.0.0.1', 0)):
         """
         create a socket
         :param family: always set to AF_SAM, any other value will be ignored
@@ -29,7 +29,7 @@ class socket:
         :param samaddr: address of sam interface
         """
         if type in [SOCK_DGRAM, SOCK_RAW, SOCK_STREAM]:
-            sock = simple.Socket(samaddr, dgramaddr, type)
+            sock = simple.Socket(samaddr, dgramaddr, dgrambind, type)
             self.recv = sock.recv
             self.close = sock.close
             self.bind = sock.bind

@@ -24,7 +24,8 @@ def genconfig():
             "controlHost" : "127.0.0.1",
             "controlPort" : 7656,
             "dgramHost" : "127.0.0.1",
-            "dgramPort" : 7655
+            "dgramPort" : 7655,
+            "dgramBind" : "127.0.0.1",
         }
     }
 

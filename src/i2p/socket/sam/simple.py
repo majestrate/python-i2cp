@@ -128,7 +128,7 @@ class Socket(object):
     """
 
     _log = logging.getLogger("i2p.socket.sam.simple.BaseSocket")
-    _dgram_bind = "0.0.0.0"
+    _dgram_bind = "127.0.0.1"
     _dest_cache = dict()
     
     def samState(*states):
@@ -169,13 +169,15 @@ class Socket(object):
             return func(self, *args, **kwargs)
         return check_connect
     
-    def __init__(self, samaddr, dgramAddr, socketType):
+    def __init__(self, samaddr, dgramAddr, dgramBind, socketType):
         """
         :param samaddr: the socket address for sam
         """
         if samaddr:
             self._samAddr = samaddr
             self._samDgramAddr = dgramAddr
+            if dgramBind:
+                self._dgram_bin = dgramBind
             self._samSocket = None
             self._data_sock = None
             self._state = State.Initial

@@ -27,7 +27,8 @@ class SAMLink:
         if samcfg:
             samaddr = (samcfg["controlHost"], samcfg["controlPort"])
             dgramaddr = (samcfg["dgramHost"], samcfg["dgramPort"])
-            self._conn = socket.socket(type=socket.SOCK_DGRAM, samaddr=samaddr, dgramaddr=dgramaddr)
+            dgrambind = (samcfg["dgramBind"], 0)
+            self._conn = socket.socket(type=socket.SOCK_DGRAM, samaddr=samaddr, dgramaddr=dgramaddr, dgrambind=dgrambind)
         else:
             self._conn = socket.socket(type=socket.SOCK_DGRAM)
         self._conn.bind(keyfile)
