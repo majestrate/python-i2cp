@@ -9,7 +9,7 @@ class SAMLink:
 
     _log = logging.getLogger("i2p.tun.Handler")
 
-    _pump_interval = 0.075
+    _pump_interval = 0.01
 
     def __init__(self, remote, tundev, switch, protocol, keyfile, samcfg=None, loop=None):
         """
