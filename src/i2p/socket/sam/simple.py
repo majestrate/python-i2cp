@@ -156,6 +156,7 @@ class Socket(object):
                 self._log.info("connecting to sam")
                 # we are not connected
                 samSocket = pysocket.socket()
+                samSocket.setsockopt(pysocket.IPPROTO_TCP, ysocket.SO_KEEPALIVE, 1)
                 try:
                     samSocket.connect(self._samAddr)
                     self._samHandshake(samSocket)
