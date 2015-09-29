@@ -20,7 +20,7 @@ def genconfig():
             "netmask" : "255.255.255.248",
             "mtu" : 4000,
         },
-        "clump" : "0"
+        "clump" : "0",
         "remote" : "", 
         "sam" : {
             "controlHost" : "127.0.0.1",
