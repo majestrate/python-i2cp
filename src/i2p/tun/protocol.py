@@ -77,7 +77,7 @@ class Clumping:
             
 
 
-class Flat(ClumpingProtocol):
+class Flat(Clumping):
     """
     subset of the clumping protocol that doesn't actually clump
     """
