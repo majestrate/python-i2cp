@@ -84,7 +84,7 @@ class Flat(Clumping):
 
     def createFrames(self, packets, type):
         for pkt in packets:
-            yield self._createFrame([pkt], type)
+            yield self._create_frame([pkt], type)
     
             
 class BencodeRPC:
