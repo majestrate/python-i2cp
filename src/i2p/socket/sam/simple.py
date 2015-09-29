@@ -273,12 +273,9 @@ class Socket(object):
             if keyfile:
                 with open(keyfile, 'w') as f:
                     f.write(self._keys)
+            self.dest = datatypes.Destination(raw=self._keys, b64=True, private=True)
             self._nick = nickname
-            self.dest = self.lookup('ME')
-            if self.dest:
-                self._state = State.Ready
-            else:
-                self._state = State.Error
+            self._state = State.Ready
         else:
             self._state = State.Error
 

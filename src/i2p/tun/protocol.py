@@ -77,6 +77,16 @@ class Clumping:
             
 
 
+class Flat(ClumpingProtocol):
+    """
+    subset of the clumping protocol that doesn't actually clump
+    """
+
+    def createFrames(self, packets, type):
+        for pkt in packets:
+            yield self._createFrame([pkt], type)
+    
+            
 class BencodeRPC:
     """
     bencoded rpc protocol
