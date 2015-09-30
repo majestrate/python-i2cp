@@ -42,13 +42,13 @@ def main():
     tun = tundev.opentun(iface_cfg)
 
     if 'clump' in cfg and cfg['clump'] == '1':
-        proto = protocol.Clumping(iface_cfg['mtu'])
+        proto = protocol.Clumping
     else:
-        proto = protocol.Flat(iface_cfg['mtu'])
+        proto = protocol.Flat
     sw = switch.Switch(tun, cfg['remote'])
     # make handler
     print('creating link...')
-    handler = link.Handler(cfg["remote"], tun, sw, proto, cfg["keyfile"], cfg["sam"])
+    handler = link.Handler(cfg["remote"], tun, sw, proto(iface_cfg['mtu']), cfg["keyfile"], cfg["sam"])
     tun.up()
     print('interface ready')
     try:
