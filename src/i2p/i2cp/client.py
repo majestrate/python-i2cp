@@ -251,21 +251,14 @@ class Connection(object):
         this is a coroutine
         """
         self._log.debug('connecting...')
-        tsk = self._async(asyncio.open_connection(self._i2cp_host, self._i2cp_port, loop=self._loop))
-        ftr = asyncio.Future(loop=self._loop)
-        def _done_connecting(f):
-            try:
-                self._reader, self._writer =  f.result()
-            except Exception as e:
-                self._log.error("cannot connect to i2p router at {}:{}".format(self._i2cp_host, self._i2cp_port))
-                ftr.set_exception(e)
-            else:
-                self._log.info("connected")
-                self._loop.call_soon_threadsafe(self._async, self._send_raw(util.PROTOCOL_VERSION))
-                self._loop.call_soon_threadsafe(self._begin_session)
-                ftr.set_result(None)
-        tsk.add_done_callback(_done_connecting)
-        yield From(ftr)
+        self._reader, self._writer = yield From(asyncio.open_connection(self._i2cp_host, self._i2cp_port, loop=self._loop))
+        if self._reader and self._writer:
+            self._log.info("connected")
+            self._loop.call_soon_threadsafe(self._async, self._send_raw(util.PROTOCOL_VERSION))
+            self._loop.call_soon_threadsafe(self._begin_session)
+        else:
+            self.log.error("could not connect to router")
+        return
 
     def generate_dest(self, keyfile):
         if not os.path.exists(keyfile):
@@ -369,7 +362,7 @@ class Connection(object):
             tsk.add_done_callback(self._msg_sent)
         else:
             # delayed recall
-            self._loop.call_later(0.05, self._pump_send)
+            self._loop.call_later(0.01, self._pump_send)
             
     def _msg_sent(self, ftr):
         """
@@ -403,7 +396,7 @@ class Connection(object):
     @asyncio.coroutine
     def _send_msg(self, msg):
         if msg:
-            yield From(self._send_raw(msg.serialize()))
+            _ = yield From(self._send_raw(msg.serialize()))
         else:
             self._log.error("_send_msg given None?")
         raise Return()
@@ -532,7 +525,7 @@ class Connection(object):
             self._loop.call_soon_threadsafe(self._queue_send, msg)
         else:
             # look up the destination
-            self._issue_lookup()
+            self._issue_lookup(name)
 
 
     def send_raw_dgram(self, dest, data, srcport=0, dstport=0):
@@ -590,15 +583,22 @@ class Connection(object):
         :param dest:
         :return: the destination of this name if we know it otherwise None
         """
-        if name in self._dest_cache:
-            return self._dest_cache[name]
+        if isinstance(name, str):
+            if name in self._dest_cache:
+                return self._dest_cache[name]
+        elif isinstance(name, datatypes.Destination):
+            return name
+        elif isinstance(name, bytearray):
+            name = name.decode('ascii')
+            if name in self._dest_cache:
+                return self._dest_cache[name]
 
     def close(self):
         """
         close this connection
         """
         self._log.debug("initiate close")
-        if self._writer:
+        if hasattr(self, "_writer") and self._writer:
             self._log.debug("close writer")
             self._writer.transport.close()
             self._log.debug("writer closed")

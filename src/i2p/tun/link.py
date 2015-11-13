@@ -38,11 +38,10 @@ class SAMLink:
         self.loop.add_reader(self._conn, self._read_sock)
         self.loop.call_soon(self._pump)
         
-    def got_dgram(self, dest, data):
+    def send_dgram(self, dest, data):
         """
-        we got a packet
+        schedule a packet of data to dest
         """
-        self._log.debug('got dgram')
         self._write_buff.append((dest,data))
 
     def get_status(self):
@@ -52,12 +51,6 @@ class SAMLink:
         return len(self._read_buff), len(self._write_buff)
     
     def _pump(self):
-        # pump rpc
-        #if len(self._rpc_buff) > 0:
-        #    frames = self._protocol.createFrames(self._rpc_buff, self._protocol.FrameType.Control)
-        #    for frame in frames:
-        #        self._send_packet(dest, frame.data)
-        #    self._rpc_buff = collections.deque()
 
         # create frame to send to remote
         if len(self._read_buff) > 0:
@@ -91,7 +84,7 @@ class SAMLink:
             if pkts:
                 for pkt in pkts:
                     if pkt.type == self._protocol.FrameType.IP:
-                        self._write_ip(dest, pkt.data)
+                        self.loop.call_soon(self._switch.write_ip, dest, pkt.data)
                     elif pkt.type == self._protocol.FrameType.Control:
                         # handle a control message
                         self._handle_control(dest, pkt.data)
@@ -112,19 +105,7 @@ class SAMLink:
         :param dest: source destination
         :param data: bencoded data
         """
-        method = None
-        params = None
-                    
-    def _write_ip(self, dest, pktdata):
-        """
-        write an ip packet from a destination to the interface
-        :param dest: the remote destination
-        :param pktdata: bytearray of packet data
-        """
-        # TODO: filter packets
-        # schedule it
-        self._log.debug('write ip')
-        self.loop.call_soon(self._tundev.write, pktdata)
+        d = self._switch
         
         
     def _read_tun(self):
@@ -142,14 +123,12 @@ class SAMLink:
         result = self._conn.recvfrom(self._protocol.mtu + 64)
         if result:
             dest, pkt = result
-            self.got_dgram(dest, pkt)
+            self.loop.call_soon(self._switch.got_dgram, dest, pkt)
             
     def _send_packet(self, dest, data):
         """
         send a packet of data
         """
-        self._pps += 1
-        self._bw += len(data)
         self._log.debug("write {} to {}".format(len(data), dest))        
         # send to endpoint
         self._conn.sendto(data, (dest,0))
