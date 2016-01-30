@@ -7,7 +7,7 @@ from Crypto.Random.random import StrongRandom as random
 from Crypto.Util import asn1
 from pyelliptic.ecc import ECC
 from enum import Enum
-#import nacl.signing as nacl
+import libnacl
 
 from i2p.i2cp.util import *
 
@@ -311,6 +311,74 @@ class ECDSA256Key(ECDSAKey):
         super().__init__(SigType.ECDSA_SHA256_P256, pub, priv, key)
 
 
+
+class EdDSAKey(SigningKey):
+
+    def __init__(self, pub=None, priv=None, key=None):
+        """Construct and Ed25519-SHA512 signing key.
+
+        With no arguments, generatea a new Ed25519Key.
+        If pub or priv are set, creates an Ed25519Key using provided key material.
+        If key is se, creates an Ed25519Key using the provided key.
+        """
+        super().__init__(SigType.EdDSA_SHA512_Ed25519, pub, priv, key)
+
+    @staticmethod
+    def _parse(pub, priv=None):
+        """Parse key data"""
+        if priv:
+            # if we have private data consider it seed data
+            pub, priv = libnacl.crypto_sign_seed_keypair(priv)
+        return pub, priv
+
+    @staticmethod
+    def _generate():
+        """Generate an Ed25519-SHA512 signing key pair
+        """
+        return libnacl.crypto_sign_keypair()
+    
+
+    def _has_private(self):
+        return self.key[1] is not None
+
+    def _to_public(self):
+        return EdDSAKey(pub=self.key[0])
+
+    def _get_pubkey(self):
+        return self.key[0]
+
+    def _get_privkey(self):
+        return self.key[1][:libnacl.crypto_sign_SEEDBYTES]
+
+    def _sign(self, data):
+        """Generate EdDSA signature"""
+        assert self.key[1] is not None
+        assert len(self.key[1]) == libnacl.crypto_sign_SECRETKEYBYTES
+
+        # compute sha512 of data
+        h = libnacl.crypto_hash_sha512(data)
+        # sign hash of data
+        # crypto_sign makes a signed message we just want the signature
+        smsg = libnacl.crypto_sign(h, self.key[1])
+        return smsg[:0-len(h)]
+
+    def _verify(self, data, sig):
+        """Verify EdDSA signature."""
+        assert self.key[0] is not None
+        assert len(self.key[0]) == libnacl.crypto_sign_PUBLICKEYBYTES
+
+        # compute sha512 of data
+        h = libnacl.crypto_hash_sha512(data)
+        # construct signed message to use with crypto_sign_open
+        smsg = sig + h
+        # check message integrity
+        try:
+            return libnacl.crypto_sign_open(smsg, self.key[0]) == h
+        except:
+            # if an exception happens it's not
+            return False
+
+        
 #
 # Algorithms
 #
@@ -390,7 +458,7 @@ class SigType(Enum):
     RSA_SHA256_2048 = (4, 256, 512, 32, 256, SigAlgo.RSA, "SHA-256", "SHA256withRSA", F4_2048_SPEC, "0.9.12", None)
     RSA_SHA384_3072 = (5, 384, 768, 48, 384, SigAlgo.RSA, "SHA-384", "SHA384withRSA", F4_3072_SPEC, "0.9.12", None)
     RSA_SHA512_4096 = (6, 512, 1024, 64, 512, SigAlgo.RSA, "SHA-512", "SHA512withRSA", F4_4096_SPEC, "0.9.12", None)
-    EdDSA_SHA512_Ed25519 = (7, 32, 32, 64, 64, SigAlgo.EdDSA, "SHA-512", "SHA512withEdDSA", Ed25519_SHA_512_SPEC, "0.9.17", None)
+    EdDSA_SHA512_Ed25519 = (7, 32, 32, 64, 64, SigAlgo.EdDSA, "SHA-512", "SHA512withEdDSA", Ed25519_SHA_512_SPEC, "0.9.17", EdDSAKey)
 
     @property
     def code(self):
@@ -508,13 +576,3 @@ def asn1_to_sig_bytes(asn, tolen):
 
 def rectify(part, tolen):
     return int.from_bytes(part, 'big').to_bytes(tolen, 'big')
-
-
-if __name__ == '__main__':
-    data = b'testdata'
-    print ('generate dsa key...')
-    dkey = DSAKey()
-    print ('sign...')
-    sig = DSA_SHA1_SIGN(dkey, data)
-    print ('verify...')
-    DSA_SHA1_VERIFY(dkey, data, sig)

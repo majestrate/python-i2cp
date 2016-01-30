@@ -45,7 +45,10 @@ class TestDSAKey(SigningKeyMixin, TestCase):
 
     cls = crypto.DSAKey
 
+class TestEd25519Key(SigningKeyMixin, TestCase):
 
+    cls = crypto.EdDSAKey
+    
 class TestECDSA256Key(SigningKeyMixin, TestCase):
 
     cls = crypto.ECDSA256Key
