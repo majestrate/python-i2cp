@@ -17,7 +17,3 @@ class TestSocket(TestCase):
         """
         TODO: implement
         """
-
-        
-    def tearDown(self):
-        socket.close()

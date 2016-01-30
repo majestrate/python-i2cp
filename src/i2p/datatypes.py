@@ -473,7 +473,7 @@ class LeaseSet(object):
             self.sig = raw[-40:]
             self.dest.verify(raw[:-40], self.sig)
             # Signature matches, now parse the rest
-            data = data[:len(self.dest)]
+            data = data[len(self.dest):]
             self.enckey = crypto.ElGamalKey(data[:256])
             self._log.debug(self.enckey)
             data = data[256:]
